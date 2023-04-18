@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPYCACHEPREFIX='.build/'
+
+poetry install
+poetry run mypy *.py
+poetry run pytest ./test.py "$@"

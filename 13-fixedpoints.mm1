@@ -1,0 +1,73 @@
+import "01-propositional.mm1";
+import "12-proof-system-p.mm1";
+
+--- Helpers
+-----------
+
+theorem unfold_r (psi phi: Pattern X)
+  (p: $_Positive X psi$)
+  (h: $phi -> s[ mu X psi / X ] psi$):
+  $phi -> mu X psi$ =
+  '(syl (pre_fixpoint p) h );
+
+theorem propag_floor (phi psi ctx: Pattern box):
+    $app[ phi /\ |_ psi _| / box ] ctx
+        -> app[ phi  / box ] ctx /\ |_ psi _| $
+ = '(iand (framing anl)  @ rsyl (framing anr) (rsyl lemma_56 (bi1 ceil_floor_floor)) );
+
+
+--- Appendix G: Properties of Proof System H_mu
+-----------------------------------------------
+
+
+--- Appendix I: Notations and Proofs about Recursive Symbols
+------------------------------------------------------------
+
+theorem ctximp_in_ctx_forward {box: SVar} (ctx psi: Pattern box)
+: $app[ (ctximp_app box ctx psi) / box ] ctx -> psi$
+ = (named '(rsyl (propag_exists eFresh_disjoint) @ exists_generalization eFresh_disjoint @ rsyl propag_floor @ impcom @ rsyl corollary_57_floor id));
+
+theorem wrap_lemma {x: EVar} (phi psi: Pattern x)
+  (h: $ (x in phi) -> psi $):
+  $ (x in phi) -> |_ psi _| $ =
+  '(syl (con3 @ framing_def @ con3 h) @ con2 @ rsyl (framing_def membership_not_reverse)
+  (rsyl (norm (norm_imp
+    (norm_trans appCtxR_disjoint @ norm_app norm_refl @ norm_trans appCtxR_disjoint @ norm_app norm_refl appCtxVar)
+    norm_refl) (! lemma_56 box)) (con2 @ dne singletonDef)));
+
+theorem unwrap_lemma {x y: EVar} {box: SVar} (ctx phi: Pattern box):
+  $ ((y in eVar x) /\ y in |_ app[ eVar x / box ] ctx -> phi _|) -> |_ (app[ eVar y / box ] ctx) -> phi _| $ =
+  (named '(curry @ rsyl membership_var_forward @ syl (imim1i mem_floor_forward) @
+  con3d @ norm (norm_imp_r @ norm_imp defNorm defNorm) (lemma_14 @ con3d @ rsyl eq_to_framing imim1)));
+
+--- lemma 91 (Specialized to Application contexts)
+theorem unwrap {box: SVar} (ctx phi psi: Pattern box)
+  (h: $ phi -> (ctximp_app box ctx psi) $):
+  $ (app[ phi / box ] ctx) -> psi $ =
+  (named '( imim1 (syl (rsyl propag_exists_disjoint @ exists_framing lemma_60_forward)
+               @ framing lemma_62_b_reverse)
+          @ exists_generalization_disjoint @ impcom (imim2 corollary_57_floor (
+    rsyl (membership_imp_forward @ con1 exists_intro_same_var @ membership_intro h)
+  @ rsyl membership_exists_forward
+  @ rsyl (exists_framing membership_and_forward)
+  @ exists_generalization_disjoint unwrap_lemma
+  ))));
+
+theorem wrap {box: SVar} (ctx psi: Pattern box) (phi: Pattern box)
+  (h: $ (app[ phi / box ] ctx) -> psi $):
+  $ phi -> (ctximp_app box ctx psi) $ =
+  (named '(rsyl lemma_62_b_reverse @ exists_framing @ anim id
+    (wrap_lemma @ expcom @ rsyl exists_intro_same_var (imim1i (rsyl (exists_framing lemma_60_reverse) prop_43_exists) (rsyl (framing (rsyl (exists_framing ancom) lemma_62_forward)) h)))
+  ));
+
+theorem wrap_subst {box: SVar} (ctx phi psi rho: Pattern box)
+  (subst: $ Norm (app[ phi / box ] ctx) rho $)
+  (h: $ rho -> psi $):
+  $ phi -> (ctximp_app box ctx psi) $ =
+  '(wrap @ norm (norm_sym @ norm_imp_l subst) h);
+
+theorem unwrap_subst {box: SVar} (ctx phi psi rho: Pattern box)
+  (subst: $ Norm (app[ phi / box ] ctx) rho $)
+  (h: $ phi -> (ctximp_app box ctx psi) $):
+  $ rho -> psi $ =
+  '(norm (norm_imp_l subst) @ unwrap h);

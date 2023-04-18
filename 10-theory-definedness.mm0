@@ -1,0 +1,29 @@
+import "00-matching-logic.mm0";
+
+term defSym: Symbol;
+
+def _ceil (phi: Pattern): Pattern = $ app (sym defSym) phi $;
+notation _ceil (phi: Pattern) : Pattern = ($|^$:45) phi ($^|$:0);
+def _floor (phi: Pattern): Pattern = $ not (|^ not phi ^|) $;
+notation _floor (phi: Pattern) : Pattern = ($|_$:45) phi ($_|$:0);
+def _eq (phi1 phi2: Pattern): Pattern = $ |_  phi1 <-> phi2 _| $;
+infixl _eq: $==$ prec 15;
+def _neq (phi1 phi2: Pattern): Pattern = $ not (phi1 == phi2) $;
+infixl _neq: $!=$ prec 15;
+def _subset (phi1 phi2: Pattern): Pattern = $ |_ phi1 -> phi2 _| $;
+infixl _subset: $C_$ prec 15;
+def _in {x: EVar} (phi: Pattern x): Pattern x = $ |^ (eVar x) /\ phi ^| $;
+infixl _in: $in$ prec 35;
+-- TODO: Define the following and then update the metatheorems to consider this new construct
+-- def _inn (phi1 phi2: Pattern): Pattern = $ |^ phi1 /\ phi2 ^| $;
+-- infixl _inn: $inn$ prec 35;
+
+axiom definedness {x: EVar}: $ |^ eVar x ^| $;
+
+--- Contextual Implications
+---------------------------
+
+--- We define this here, so it can be used in public theories.
+def ctximp_app {.dummy: EVar} {box: SVar} (ctx: Pattern box) (phi: Pattern): Pattern
+ = $ exists dummy (eVar dummy /\ ((app[ eVar dummy / box ] ctx) C_ phi)) $;
+

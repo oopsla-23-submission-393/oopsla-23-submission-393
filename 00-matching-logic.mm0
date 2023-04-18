@@ -1,0 +1,285 @@
+--- This file contains the proof system for matching logic
+
+delimiter $ ( ~ $ $ ) $;
+
+strict provable sort Pattern;
+pure sort EVar;
+pure sort SVar;
+sort Symbol;
+
+strict provable sort Positivity;
+strict provable sort Freshness;
+strict provable sort Normalization;
+
+-- Standard Matching Logic Pattern constructors
+term eVar {x: EVar}: Pattern x;
+term sVar {X: SVar}: Pattern X;
+term sym: Symbol > Pattern;
+term bot: Pattern;
+term imp: Pattern > Pattern > Pattern;
+term app: Pattern > Pattern > Pattern;
+term exists {x: EVar} (p: Pattern x): Pattern;
+term mu {X: SVar} (p: Pattern X): Pattern;
+
+term evSubst {x: EVar}: Pattern x > Pattern x > Pattern x;
+notation evSubst {x: EVar} (phi psi: Pattern x): Pattern x =
+  ($e[$:41) psi ($/$:0) x ($]$:0) phi;
+term svSubst {X: SVar}: Pattern X > Pattern X > Pattern X;
+notation svSubst {X: SVar} (phi psi: Pattern X): Pattern X =
+  ($s[$:41) psi ($/$:0) X ($]$:0) phi;
+term ctxApp {box: SVar}: Pattern box > Pattern > Pattern;
+notation ctxApp {box: SVar} (ctx: Pattern box) (psi: Pattern): Pattern =
+  ($app[$:41) psi ($/$:0) box ($]$:0) ctx;
+
+-- Definitions of common logical connectives
+infixr imp: $->$ prec 24;
+def not (phi: Pattern): Pattern = $ phi -> bot $;
+prefix not: $~$ prec 41;
+def top: Pattern = $ ~bot $;
+def or (phi1 phi2: Pattern): Pattern = $ ~phi1 -> phi2 $;
+infixl or: $\/$ prec 29;
+def and (phi1 phi2: Pattern): Pattern = $ ~(phi1 -> ~phi2) $;
+infixl and: $/\$ prec 33;
+def equiv (phi1 phi2: Pattern): Pattern = $ (phi1 -> phi2) /\ (phi2 -> phi1) $;
+infixl equiv: $<->$ prec 19;
+def forall {x: EVar} (phi: Pattern x): Pattern = $ ~(exists x (~phi)) $;
+def nu {X: SVar} (phi: Pattern X): Pattern = $ ~(mu X (~ s[ ~ sVar X / X ] phi)) $;
+
+-- Freshness for Element Variables
+term _eFresh {x: EVar}: Pattern x > Freshness;
+axiom eFresh_disjoint {x: EVar} (phi: Pattern): $ _eFresh x phi $;
+axiom eFresh_imp {x: EVar} (phi1 phi2: Pattern x):
+  $ _eFresh x phi1 $ >
+  $ _eFresh x phi2 $ >
+  $ _eFresh x (phi1 -> phi2) $;
+axiom eFresh_app {x: EVar} (phi1 phi2: Pattern x):
+  $ _eFresh x phi1 $ >
+  $ _eFresh x phi2 $ >
+  $ _eFresh x (app phi1 phi2) $;
+axiom eFresh_exists_same_var {x: EVar} (phi: Pattern x):
+  $ _eFresh x (exists x phi) $;
+axiom eFresh_exists {x y: EVar} (phi: Pattern x y):
+  $ _eFresh x phi $ >
+  $ _eFresh x (exists y phi) $;
+axiom eFresh_mu {x: EVar} {X: SVar} (phi: Pattern x X):
+  $ _eFresh x phi $ >
+  $ _eFresh x (mu X phi) $;
+axiom eFresh_eSubst_same_var {x: EVar} (phi psi: Pattern x):
+  $ _eFresh x psi $ >
+  $ _eFresh x (e[ psi / x ] phi) $;
+axiom eFresh_eSubst {x y: EVar} (phi psi: Pattern x y):
+  $ _eFresh x phi $ >
+  $ _eFresh x psi $ >
+  $ _eFresh x (e[ psi / y ] phi) $;
+axiom eFresh_sSubst {x: EVar} {X: SVar} (phi psi: Pattern x X):
+  $ _eFresh x phi $ >
+  $ _eFresh x psi $ >
+  $ _eFresh x (s[ psi / X ] phi) $;
+axiom eFresh_appCtx {x: EVar} {box: SVar} (ctx psi: Pattern x box):
+  $ _eFresh x ctx $ >
+  $ _eFresh x psi $ >
+  $ _eFresh x (app[ psi / box ] ctx) $;
+
+-- Freshness for Set Variables
+term _sFresh: SVar > Pattern > Freshness;
+axiom sFresh_disjoint {X: SVar} (phi: Pattern): $ _sFresh X phi $;
+axiom sFresh_imp {X: SVar} (phi1 phi2: Pattern X):
+  $ _sFresh X phi1 $ >
+  $ _sFresh X phi2 $ >
+  $ _sFresh X (phi1 -> phi2) $;
+axiom sFresh_app {X: SVar} (phi1 phi2: Pattern X):
+  $ _sFresh X phi1 $ >
+  $ _sFresh X phi2 $ >
+  $ _sFresh X (app phi1 phi2) $;
+axiom sFresh_exists {X : SVar} {y: EVar} (phi: Pattern X y):
+  $ _sFresh X phi $ >
+  $ _sFresh X (exists y phi) $;
+axiom sFresh_mu_same_var {X: SVar} (phi: Pattern X):
+  $ _sFresh X (mu X phi) $;
+axiom sFresh_mu {X Y: SVar} (phi: Pattern X Y):
+  $ _sFresh X phi $ >
+  $ _sFresh X (mu Y phi) $;
+axiom sFresh_eSubst {X: SVar} {y: EVar} (phi psi: Pattern X y):
+  $ _sFresh X phi $ >
+  $ _sFresh X psi $ >
+  $ _sFresh X (e[ psi / y ] phi) $;
+axiom sFresh_sSubst_same_var {X: SVar} (phi psi: Pattern X):
+  $ _sFresh X psi $ >
+  $ _sFresh X (s[ psi / X ] phi) $;
+axiom sFresh_sSubst {X Y: SVar} (phi psi: Pattern X Y):
+  $ _sFresh X phi $ >
+  $ _sFresh X psi $ >
+  $ _sFresh X (s[ psi / Y ] phi) $;
+axiom sFresh_appCtx {X box: SVar} (ctx psi: Pattern X box):
+  $ _sFresh X ctx $ >
+  $ _sFresh X psi $ >
+  $ _sFresh X (app[ psi / box ] ctx) $;
+
+-- Positivity definitions
+term _Positive {X: SVar}: Pattern X > Positivity;
+term _Negative {X: SVar}: Pattern X > Positivity;
+
+axiom positive_fresh {X: SVar} (phi: Pattern X): $ _sFresh X phi $ > $ _Positive X phi $;
+axiom positive_in_same_sVar {X: SVar}: $ _Positive X (sVar X) $;
+axiom positive_in_imp {X: SVar} (phi1 phi2: Pattern X):
+  $ _Negative X phi1 $ > $ _Positive X phi2 $ > $ _Positive X (phi1 -> phi2) $;
+axiom positive_in_app {X: SVar} (phi1 phi2: Pattern X):
+  $ _Positive X phi1 $ > $ _Positive X phi2 $ > $ _Positive X (app phi1 phi2) $;
+axiom positive_in_exists {X: SVar} {x: EVar} (phi: Pattern x X):
+  $ _Positive X phi $ > $ _Positive X (exists x phi) $;
+axiom positive_in_mu {X: SVar} {Y: SVar} (phi: Pattern X Y):
+  $ _Positive X phi $ > $ _Positive X (mu Y phi) $;
+
+axiom negative_fresh {X: SVar} (phi: Pattern X): $ _sFresh X phi $ > $ _Negative X phi $;
+axiom negative_in_imp {X: SVar} (phi1 phi2: Pattern X):
+  $ _Positive X phi1 $ > $ _Negative X phi2 $ > $ _Negative X (phi1 -> phi2) $;
+axiom negative_in_app {X: SVar} (phi1 phi2: Pattern X):
+  $ _Negative X phi1 $ > $ _Negative X phi2 $ > $ _Negative X (app phi1 phi2) $;
+axiom negative_in_exists {X: SVar} {x: EVar} (phi: Pattern x X):
+  $ _Negative X phi $ > $ _Negative X (exists x phi) $;
+axiom negative_in_mu {X: SVar} {Y: SVar} (phi: Pattern X Y):
+  $ _Negative X phi $ > $ _Negative X (mu Y phi) $;
+
+-- Definition of substitutions and application contexts as meta-level relations
+term Norm: Pattern > Pattern > Normalization;
+
+axiom eSubstitution_id {x: EVar} (phi: Pattern x): $ Norm (e[ eVar x / x ] phi) phi $;
+axiom eSubstitution_fresh {x: EVar} (phi psi: Pattern x): $ _eFresh x phi $ > $ Norm (e[ psi / x ]  phi) phi $;
+axiom eSubstitution_in_same_eVar {x: EVar} (psi: Pattern x): $ Norm (e[ psi / x ] eVar x) psi $;
+axiom eSubstitution_in_imp {x: EVar} (psi phi1 phi2: Pattern x):
+  $ Norm (e[ psi / x ] (phi1 -> phi2)) ((e[ psi / x ] phi1) -> e[ psi / x ] phi2) $;
+axiom eSubstitution_in_app {x: EVar} (psi phi1 phi2: Pattern x):
+  $ Norm (e[ psi / x ] app phi1 phi2) (app (e[ psi / x ] phi1) (e[ psi / x ] phi2)) $;
+axiom eSubstitution_in_exists {x y: EVar} (phi psi: Pattern x y):
+  $ _eFresh y psi $ >
+  $ Norm (e[ psi / x ] exists y phi) (exists y (e[ psi / x ] phi)) $;
+axiom eSubstitution_in_mu {x: EVar} {X: SVar} (phi psi: Pattern x X):
+  $ _sFresh X psi $ >
+  $ Norm (e[ psi / x ] mu X phi) (mu X (e[ psi / x ] phi)) $;
+axiom eSubstitution_in_eSubst_same_var {x: EVar} (psi1 psi2 phi: Pattern x):
+  $ Norm (e[ psi1 / x ] e[ psi2 / x ] phi) (e[ (e[ psi1 / x ] psi2) / x ] phi) $;
+axiom eSubstitution_in_eSubst {x y: EVar} (psi1 psi2 phi: Pattern x y):
+  $ Norm (e[ psi1 / x ] e[ psi2 / y ] phi) (e[ (e[ psi1 / x ] psi2) / y ] e[ psi1 / x ] phi) $;
+--- TODO: I think the following should be removed, and proved instead? Do we need it yet?
+axiom eSubstitution_in_sSubst {x: EVar} {X: SVar} (psi1 psi2 phi: Pattern x X):
+  $ Norm (e[ psi1 / x ] s[ psi2 / X ] phi) (s[ (e[ psi1 / x ] psi2) / X ] e[ psi1 / x ] phi) $;
+axiom eSubstitution_in_appCtx {x: EVar} {box: SVar} (psi1 psi2 phi: Pattern x box):
+  $ Norm (e[ psi1 / x ] app[ psi2 / box ] phi) (app[ (e[ psi1 / x ] psi2) / box ] e[ psi1 / x ] phi) $;
+
+axiom sSubstitution_id {X: SVar} (phi: Pattern X): $ Norm (s[ sVar X / X ] phi) phi $;
+axiom sSubstitution_fresh {X: SVar} (phi psi: Pattern X): $ _sFresh X phi $ > $ Norm (s[ psi / X ] phi) phi $;
+axiom sSubstitution_in_same_sVar {X: SVar} (psi: Pattern X): $ Norm (s[ psi / X ] sVar X) psi $;
+axiom sSubstitution_in_imp {X: SVar} (psi phi1 phi2: Pattern X):
+  $ Norm (s[ psi / X ] (phi1 -> phi2)) ((s[ psi / X ] phi1) -> (s[ psi / X ] phi2)) $;
+axiom sSubstitution_in_app {X: SVar} (psi phi1 phi2: Pattern X):
+  $ Norm (s[ psi / X ] app phi1 phi2) (app (s[ psi / X ] phi1) (s[ psi / X ] phi2)) $;
+axiom sSubstitution_in_exists {X: SVar} {x: EVar} (phi psi: Pattern X x):
+  $ _eFresh x psi $ >
+  $ Norm (s[ psi / X ] exists x phi) (exists x (s[ psi / X ] phi)) $;
+axiom sSubstitution_in_mu {X Y: SVar} (psi phi: Pattern X Y):
+  $ _sFresh Y psi $ >
+  $ Norm (s[ psi / X ] mu Y phi) (mu Y (s[ psi / X ] phi)) $;
+axiom sSubstitution_in_eSubst {X: SVar} {x: EVar} (psi1 psi2 phi: Pattern x X):
+  $ Norm (s[ psi1 / X ] e[ psi2 / x ] phi) (e[ (s[ psi1 / X ] psi2) / x ] s[ psi1 / X ] phi) $;
+axiom sSubstitution_in_sSubst_same_var {X: SVar} (psi1 psi2 phi: Pattern X):
+  $ Norm (s[ psi1 / X ] s[ psi2 / X ] phi) (s[ (s[ psi1 / X ] psi2) / X ] phi) $;
+axiom sSubstitution_in_sSubst {X Y: SVar} (psi1 psi2 phi: Pattern X Y):
+  $ Norm (s[ psi1 / X ] s[ psi2 / Y ] phi) (s[ (s[ psi1 / X ] psi2) / Y ] s[ psi1 / X ] phi) $;
+axiom sSubstitution_in_appCtx {X box: SVar} (psi1 psi2 phi: Pattern X box):
+  $ Norm (s[ psi1 / X ] app[ psi2 / box ] phi) (app[ (s[ psi1 / X ] psi2) / box ] s[ psi1 / X ] phi) $;
+
+axiom appCtxVar {box: SVar} (phi: Pattern box): $ Norm (app[ phi / box ] sVar box) phi $;
+axiom appCtxL {box: SVar} (phi1 phi2 ctx: Pattern box):
+  $ _sFresh box phi2 $ >
+  $ Norm (app[ phi1 / box ] (app ctx phi2)) (app (app[ phi1 / box ] ctx) phi2) $;
+axiom appCtxR {box: SVar} (phi1 phi2 ctx: Pattern box):
+  $ _sFresh box phi1 $ >
+  $ Norm (app[ phi2 / box ] (app phi1 ctx)) (app phi1 (app[ phi2 / box ] ctx)) $;
+-- TODO: Do we need to propagate app[] through the other substitution constructs?
+axiom appCtxNested {box1 box2: SVar} (ctx1 ctx2 phi: Pattern box1 box2):
+  $ _sFresh box2 ctx1 $ >
+  $ Norm (app[ phi / box2 ] app[ ctx2 / box1 ] ctx1) (app[ app[ phi / box2 ] ctx2 / box1 ] ctx1) $;
+
+axiom norm_refl (phi: Pattern): $ Norm phi phi $;
+axiom norm_sym (phi psi: Pattern):
+  $ Norm phi psi $ >
+  $ Norm psi phi $;
+axiom norm_trans (phi1 phi2 phi3: Pattern):
+  $ Norm phi1 phi2 $ >
+  $ Norm phi2 phi3 $ >
+  $ Norm phi1 phi3 $;
+axiom norm_imp (phi psi phi2 psi2: Pattern):
+  $ Norm phi phi2 $ >
+  $ Norm psi psi2 $ >
+  $ Norm (phi -> psi) (phi2 -> psi2) $;
+axiom norm_app (phi psi phi2 psi2: Pattern):
+  $ Norm phi phi2 $ >
+  $ Norm psi psi2 $ >
+  $ Norm (app phi psi) (app phi2 psi2) $;
+axiom norm_exists {x: EVar} (phi phi2: Pattern x):
+  $ Norm phi phi2 $ >
+  $ Norm (exists x phi) (exists x phi2) $;
+axiom norm_mu {X: SVar} (phi phi2: Pattern X):
+  $ Norm phi phi2 $ >
+  $ Norm (mu X phi) (mu X phi2) $;
+-- pt stands for pass-through
+axiom norm_evSubst_pt {x: EVar} (ctx ctx2 phi phi2: Pattern x):
+  $ Norm ctx ctx2 $ >
+  $ Norm phi phi2 $ >
+  $ Norm (evSubst x ctx phi) (evSubst x ctx2 phi2) $;
+axiom norm_svSubst_pt {X: SVar} (ctx ctx2 phi phi2: Pattern X):
+  $ Norm ctx ctx2 $ >
+  $ Norm phi phi2 $ >
+  $ Norm (svSubst X ctx phi) (svSubst X ctx2 phi2) $;
+axiom norm_ctxApp_pt {box: SVar} (ctx ctx2 phi phi2: Pattern box):
+  $ Norm ctx ctx2 $ >
+  $ Norm phi phi2 $ >
+  $ Norm (ctxApp box ctx phi) (ctxApp box ctx2 phi2) $;
+
+-- The Proof System of Matching Logic
+axiom norm (phi psi: Pattern):
+  $ Norm phi psi $ >
+  $ phi $ >
+  $ psi $;
+
+axiom prop_1 (phi1 phi2: Pattern):
+  $ phi1 -> phi2 -> phi1 $;
+axiom prop_2 (phi1 phi2 phi3: Pattern):
+  $ (phi1 -> phi2 -> phi3) -> (phi1 -> phi2) -> (phi1 -> phi3) $;
+axiom prop_3 (phi1 phi2: Pattern):
+  $ (~phi1 -> ~phi2) -> phi2 -> phi1 $;
+axiom mp (phi psi: Pattern):
+  $ phi -> psi $ > $ phi $ > $ psi $;
+axiom exists_intro {x y: EVar} (phi: Pattern x y):
+  $ (e[ (eVar y) / x ] phi) -> exists x phi $;
+axiom exists_intro_same_var {x: EVar} (phi: Pattern x):
+  $ phi -> exists x phi $;
+axiom exists_generalization {x: EVar} (phi1 phi2: Pattern x):
+  $ _eFresh x phi2 $ >
+  $ phi1 -> phi2 $ >
+  $ (exists x phi1) -> phi2 $;
+axiom propag_or {box: SVar} (ctx phi1 phi2: Pattern box):
+  $ (app[ phi1 \/ phi2 / box ] ctx) -> (app[ phi1 / box ] ctx \/ app[ phi2 / box ] ctx) $;
+axiom propag_exists {box: SVar} {x: EVar} (ctx phi: Pattern box x):
+  $ _eFresh x ctx $ >
+  $ (app[ exists x phi / box ] ctx) -> exists x (app[ phi / box ] ctx) $;
+axiom framing {box: SVar} (ctx phi1 phi2: Pattern box):
+  $ phi1 -> phi2 $ >
+  $ (app[ phi1 / box ] ctx) -> app[ phi2 / box ] ctx $;
+axiom set_var_subst {X: SVar} (phi psi: Pattern X):
+  $ phi $ > $ s[ psi / X ] phi $;
+axiom pre_fixpoint {X: SVar} (phi: Pattern X):
+  $ _Positive X phi $ >
+  $ (s[ mu X phi / X ] phi) -> mu X phi $;
+axiom KT {X: SVar} (phi psi: Pattern X):
+  $ _Positive X phi $ >
+  $ (s[ psi / X ] phi) -> psi $ >
+  $ (mu X phi) -> psi $;
+axiom existence {x: EVar}: $ exists x (eVar x) $;
+axiom singleton {box1 box2: SVar} {x: EVar}
+  (ctx1 ctx2 phi: Pattern box1 box2 x):
+  $ ~(app[ (eVar x) /\ phi / box1 ] ctx1 /\ app[ (eVar x) /\ ~phi / box2 ] ctx2) $;
+axiom singleton_same_var {box: SVar} {x: EVar}
+  (ctx1 ctx2 phi: Pattern box x):
+  $ ~(app[ (eVar x) /\ phi / box ] ctx1 /\ app[ (eVar x) /\ ~phi / box ] ctx2) $;
+

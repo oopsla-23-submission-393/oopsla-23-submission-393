@@ -1,0 +1,69 @@
+import "01-propositional.mm1";
+import "02-ml-normalization.mm1";
+import "10-theory-definedness.mm0";
+
+
+--- Normalizations over various sugar
+-------------------------------------
+
+theorem defNorm {box: SVar} (phi: Pattern):
+  $ Norm (app[ phi / box ] (|^ sVar box ^|)) (|^ phi ^|) $ =
+  '(norm_trans appCtxR_disjoint @ norm_app norm_refl appCtxVar);
+theorem defNorm2 {box: SVar} (phi: Pattern):
+  $ Norm (app[ phi / box ] (|^ |^ sVar box ^| ^|)) (|^ (|^ phi ^|) ^|) $ =
+  '(norm_trans appCtxR_disjoint @ norm_app norm_refl defNorm);
+theorem singletonDef {x: EVar} (phi: Pattern x):
+  $ ~(|^ eVar x /\ phi ^| /\ |^ eVar x /\ ~phi ^|) $ =
+  '(singleton_norm (! defNorm box1) (! defNorm box2));
+theorem norm_def (h: $ Norm phi psi $):
+  $ Norm (|^ phi ^|) (|^ psi ^|) $ =
+  '(norm_app norm_refl h);
+theorem norm_floor (h: $ Norm phi psi $):
+  $ Norm (|_ phi _|) (|_ psi _|) $ =
+  '(norm_not @ norm_def @ norm_not h);
+theorem norm_mem {x: EVar} (phi1 phi2: Pattern x)
+  (h: $ Norm phi1 phi2 $):
+  $ Norm (x in phi1) (x in phi2) $ =
+  '(norm_def @ norm_and norm_refl h);
+
+theorem norm_subset (phi1 phi2: Pattern)
+  (h1: $ Norm phi1 phi2 $)
+  (h2: $ Norm psi1 psi2 $):
+  $ Norm (phi1 C_ psi1) (phi2 C_ psi2) $
+  = '(norm_floor @ norm_imp h1 h2);
+theorem norm_eq (phi1 phi2: Pattern)
+  (h1: $ Norm phi1 phi2 $)
+  (h2: $ Norm psi1 psi2 $):
+  $ Norm (phi1 == psi1) (phi2 == psi2) $
+  = '(norm_floor @ norm_equiv h1 h2);
+
+theorem norm_ctximp_app (phi1: Pattern box) (phi2: Pattern)
+  (h1: $ Norm phi1 phi2 $)
+  (h2: $ Norm psi1 psi2 $):
+  $ Norm (ctximp_app box phi1 psi1) (ctximp_app box phi2 psi2) $ =
+  (named '(norm_exists @ norm_and_r @ norm_subset (norm_ctxApp_pt h1 norm_refl) h2));
+
+--- High level versions of axioms
+---------------------------------
+
+theorem framing_def (h: $ phi1 -> phi2 $):
+  $ |^ phi1 ^| -> |^ phi2 ^| $ =
+  '(framing_norm (! defNorm box) defNorm h);
+theorem framing_floor (h: $ phi1 -> phi2 $):
+  $ |_ phi1 _| -> |_ phi2 _| $ =
+  '(con3 @ framing_def @ con3 h);
+
+theorem framing_subset
+  (h1: $ phi2 -> phi1 $)
+  (h2: $ psi1 -> psi2 $):
+  $ (phi1 C_ psi1) -> (phi2 C_ psi2) $ =
+  '(framing_floor @ imim h1 h2);
+
+
+theorem propag_bot {box: SVar} (ctx: Pattern box):
+  $ (app[ bot / box ] ctx) -> bot $ =
+  '(syl (! singleton_same_var _ x _ _ (eVar x)) @ iand (framing absurdum) (framing absurdum));
+
+theorem propag_or_def (phi1 phi2: Pattern):
+  $ |^ phi1 \/ phi2 ^| -> |^ phi1 ^| \/ |^ phi2 ^| $ =
+  '(norm (norm_imp defNorm (norm_or defNorm defNorm)) (! propag_or x));

@@ -1,0 +1,512 @@
+import "00-matching-logic.mm0";
+import "01-propositional.mm1";
+
+--- Normalizations over various sugar
+-------------------------------------
+
+--- app
+theorem norm_app_l (phi phi1 phi2: Pattern)
+  (h: $ Norm phi1 phi2 $):
+  $ Norm (app phi1 phi) (app phi2 phi) $ =
+  '(norm_app h norm_refl);
+theorem norm_app_r (phi phi1 phi2: Pattern)
+  (h: $ Norm phi1 phi2 $):
+  $ Norm (app phi phi1) (app phi phi2) $ =
+  '(norm_app norm_refl h);
+
+--- not
+theorem norm_not (phi phi2: Pattern)
+  (h: $ Norm phi phi2 $):
+  $ Norm (~phi) (~phi2) $ =
+  '(norm_imp h norm_refl);
+theorem norm_imp_l (phi1 phi2 psi: Pattern)
+  (h: $ Norm phi1 phi2 $):
+  $ Norm (phi1 -> psi) (phi2 -> psi) $ =
+  '(norm_imp h norm_refl);
+theorem norm_imp_r (phi psi1 psi2: Pattern)
+  (h: $ Norm psi1 psi2 $):
+  $ Norm (phi -> psi1) (phi -> psi2) $ =
+  '(norm_imp norm_refl h);
+
+theorem eFresh_not {x: EVar} (phi: Pattern x)
+  (h: $ _eFresh x phi $):
+  $ _eFresh x (~ phi) $ =
+  '(eFresh_imp h eFresh_disjoint);
+
+theorem sFresh_not {X: SVar} (phi: Pattern X)
+  (h: $ _sFresh X phi $):
+  $ _sFresh X (~ phi) $ =
+  '(sFresh_imp h sFresh_disjoint);
+
+theorem eSubstitution_disjoint {x: EVar} (phi: Pattern) (psi: Pattern x): $ Norm (e[ psi / x ]  phi) phi $ = '(eSubstitution_fresh eFresh_disjoint);
+theorem sSubstitution_disjoint {X: SVar} (phi: Pattern) (psi: Pattern X): $ Norm (s[ psi / X ]  phi) phi $ = '(sSubstitution_fresh sFresh_disjoint);
+theorem eSubstitution_in_same_exists {x: EVar} (psi phi: Pattern x):
+  $ Norm (e[ psi / x ] exists x phi) (exists x phi) $ =
+  '(eSubstitution_fresh eFresh_exists_same_var);
+theorem sSubstitution_in_same_mu {X: SVar} (psi phi: Pattern X):
+  $ Norm (s[ psi / X ] mu X phi) (mu X phi) $ =
+  '(sSubstitution_fresh sFresh_mu_same_var);
+theorem appCtxL_disjoint {box: SVar} (phi1 ctx: Pattern box) (phi2: Pattern):
+  $ Norm (app[ phi1 / box ] (app ctx phi2)) (app (app[ phi1 / box ] ctx) phi2) $ =
+  '(appCtxL sFresh_disjoint);
+theorem appCtxR_disjoint {box: SVar} (phi2 ctx: Pattern box) (phi1: Pattern):
+  $ Norm (app[ phi2 / box ] (app phi1 ctx)) (app phi1 (app[ phi2 / box ] ctx)) $ =
+  '(appCtxR sFresh_disjoint);
+theorem appCtxNested_disjoint {box1 box2: SVar} (ctx2 phi: Pattern box1 box2) (ctx1: Pattern box1):
+  $ Norm (app[ phi / box2 ] app[ ctx2 / box1 ] ctx1) (app[ app[ phi / box2 ] ctx2 / box1 ] ctx1) $ =
+  '(appCtxNested sFresh_disjoint);
+theorem eSubstitution_in_not {x: EVar} (psi phi: Pattern x):
+  $ Norm (e[ psi / x ] ~phi) (~e[ psi / x ] phi) $ =
+  '(norm_trans eSubstitution_in_imp @ norm_imp norm_refl eSubstitution_disjoint);
+theorem sSubstitution_in_not {X: SVar} (psi phi: Pattern X):
+  $ Norm (s[ psi / X ] ~phi) (~(s[ psi / X ] phi)) $ =
+  '(norm_trans sSubstitution_in_imp @ norm_imp norm_refl sSubstitution_disjoint);
+
+--- or
+theorem norm_or (phi psi phi2 psi2: Pattern)
+  (h1: $ Norm phi phi2 $)
+  (h2: $ Norm psi psi2 $):
+  $ Norm (phi \/ psi) (phi2 \/ psi2) $ =
+  '(norm_imp (norm_not h1) h2);
+theorem norm_or_l (phi psi phi2: Pattern)
+  (h1: $ Norm phi phi2 $):
+  $ Norm (phi \/ psi) (phi2 \/ psi) $ =
+  '(norm_imp (norm_not h1) norm_refl);
+theorem norm_or_r (phi psi psi2: Pattern)
+  (h2: $ Norm psi psi2 $):
+  $ Norm (phi \/ psi) (phi \/ psi2) $ =
+  '(norm_imp (norm_not norm_refl) h2);
+theorem eFresh_or {x: EVar} (phi1 phi2: Pattern x)
+  (h1: $ _eFresh x phi1 $)
+  (h2: $ _eFresh x phi2 $):
+  $ _eFresh x (phi1 \/ phi2) $ =
+  '(eFresh_imp (eFresh_not h1) h2);
+
+--- and
+theorem norm_and (phi psi phi2 psi2: Pattern)
+  (h1: $ Norm phi phi2 $)
+  (h2: $ Norm psi psi2 $):
+  $ Norm (phi /\ psi) (phi2 /\ psi2) $ =
+  '(norm_not @ norm_imp h1 (norm_not h2));
+theorem norm_and_l (phi psi phi2: Pattern)
+  (h: $ Norm phi phi2 $):
+  $ Norm (phi /\ psi) (phi2 /\ psi) $ =
+  '(norm_and h norm_refl);
+theorem norm_and_r (phi psi psi2: Pattern)
+  (h: $ Norm psi psi2 $):
+  $ Norm (phi /\ psi) (phi /\ psi2) $ =
+  '(norm_and norm_refl h);
+
+theorem eFresh_and {x: EVar} (phi1 phi2: Pattern x)
+  (h1: $ _eFresh x phi1 $)
+  (h2: $ _eFresh x phi2 $):
+  $ _eFresh x (phi1 /\ phi2) $ =
+  '(eFresh_not @ eFresh_imp h1 @ eFresh_not h2);
+theorem eFresh_and_l {x: EVar} (phi1: Pattern x) (phi2: Pattern)
+  (h: $ _eFresh x phi1 $):
+  $ _eFresh x (phi1 /\ phi2) $ =
+  '(eFresh_and h eFresh_disjoint);
+theorem eFresh_and_r {x: EVar} (phi1: Pattern) (phi2: Pattern x)
+  (h: $ _eFresh x phi2 $):
+  $ _eFresh x (phi1 /\ phi2) $ =
+  '(eFresh_and eFresh_disjoint h);
+
+theorem sFresh_and {X: SVar} (phi1 phi2: Pattern X)
+  (h1: $ _sFresh X phi1 $)
+  (h2: $ _sFresh X phi2 $):
+  $ _sFresh X (phi1 /\ phi2) $ =
+  '(sFresh_not @ sFresh_imp h1 @ sFresh_not h2);
+theorem sFresh_and_l {X: SVar} (phi1: Pattern X) (phi2: Pattern)
+  (h: $ _sFresh X phi1 $):
+  $ _sFresh X (phi1 /\ phi2) $ =
+  '(sFresh_and h sFresh_disjoint);
+theorem sFresh_and_r {X: SVar} (phi1: Pattern) (phi2: Pattern X)
+  (h: $ _sFresh X phi2 $):
+  $ _sFresh X (phi1 /\ phi2) $ =
+  '(sFresh_and sFresh_disjoint h);
+
+theorem eSubstitution_in_and {x: EVar} (psi phi1 phi2: Pattern x):
+  $ Norm (e[ psi / x ] (phi1 /\ phi2)) ((e[ psi / x ] phi1) /\ e[ psi / x ] phi2) $ =
+  '(norm_trans eSubstitution_in_not @ norm_not @ norm_trans eSubstitution_in_imp @ norm_imp_r eSubstitution_in_not);
+theorem sSubstitution_in_and {X: SVar} (psi phi1 phi2: Pattern X):
+  $ Norm (s[ psi / X ] (phi1 /\ phi2)) ((s[ psi / X ] phi1) /\ s[ psi / X ] phi2) $ =
+  '(norm_trans sSubstitution_in_not @ norm_not @ norm_trans sSubstitution_in_imp @ norm_imp_r sSubstitution_in_not);
+
+
+theorem positive_disjoint {X: SVar} (phi: Pattern): $ _Positive X phi $ = '(positive_fresh sFresh_disjoint);
+theorem positive_in_same_mu {X: SVar} (phi: Pattern X): $ _Positive X (mu X phi) $ = '(positive_fresh sFresh_mu_same_var);
+
+theorem negative_disjoint {X: SVar} (phi: Pattern): $ _Negative X phi $ = '(negative_fresh sFresh_disjoint);
+theorem negative_in_same_mu {X: SVar} (phi: Pattern X): $ _Negative X (mu X phi) $ = '(negative_fresh sFresh_mu_same_var);
+
+theorem norm_equiv (phi psi phi2 psi2: Pattern)
+  (h1: $ Norm phi phi2 $)
+  (h2: $ Norm psi psi2 $):
+  $ Norm (phi <-> psi) (phi2 <-> psi2) $ =
+  '(norm_and (norm_imp h1 h2) (norm_imp h2 h1));
+theorem norm_equiv_l (phi psi phi2: Pattern)
+  (h: $ Norm phi phi2 $):
+  $ Norm (phi <-> psi) (phi2 <-> psi) $ =
+  '(norm_equiv h norm_refl);
+theorem norm_equiv_r (phi psi psi2: Pattern)
+  (h: $ Norm psi psi2 $):
+  $ Norm (phi <-> psi) (phi <-> psi2) $ =
+  '(norm_equiv norm_refl h);
+
+--- High level versions of axioms
+---------------------------------
+
+theorem exists_generalization_disjoint {x: EVar} (phi1: Pattern x) (phi2: Pattern)
+  (h: $ phi1 -> phi2 $):
+  $ (exists x phi1) -> phi2 $ =
+  '(exists_generalization eFresh_disjoint h);
+theorem propag_exists_disjoint {box: SVar} {x: EVar} (ctx: Pattern box) (phi: Pattern box x):
+  $ app[ exists x phi / box ] ctx -> exists x (app[ phi / box ] ctx) $ =
+  '(propag_exists eFresh_disjoint);
+
+theorem propag_or_bi {box: SVar} (ctx phi1 phi2: Pattern box):
+  $ (app[ phi1 \/ phi2 / box ] ctx) <-> (app[ phi1 / box ] ctx \/ app[ phi2 / box ] ctx) $
+= '(ibii  propag_or (eori (framing orl) (framing orr)));
+
+theorem exists_framing {x: EVar} (phi1 phi2: Pattern x)
+  (h: $ phi1 -> phi2 $):
+  $ (exists x phi1) -> exists x phi2 $ =
+  '(exists_generalization eFresh_exists_same_var @ syl exists_intro_same_var h);
+
+theorem or_exists_disjoint {x: EVar} (phi1: Pattern) (phi2: Pattern x):
+  $ (phi1 \/ exists x phi2) <-> exists x (phi1 \/ phi2) $ =
+  '(ibii
+    (eori
+      (syl exists_intro_same_var orl)
+      (exists_generalization eFresh_exists_same_var @ syl exists_intro_same_var orr))
+    (exists_generalization (eFresh_or eFresh_disjoint eFresh_exists_same_var) @ eori orl @ orrd exists_intro_same_var));
+
+theorem imp_exists_disjoint {x: EVar} (phi1: Pattern) (phi2: Pattern x):
+  $ (phi1 -> exists x phi2) <-> exists x (phi1 -> phi2) $ =
+  '(ibii
+    (rsyl (imim1 dne) @ rsyl (anl or_exists_disjoint) @ exists_framing @ imim1 notnot1)
+    (rsyl (exists_framing @ imim1 dne) @ rsyl (anr or_exists_disjoint) @ imim1 notnot1));
+
+theorem and_exists {x: EVar} (phi1 phi2: Pattern x):
+  $ (exists x (phi1 /\ phi2)) -> ((exists x phi1) /\ (exists x phi2)) $ =
+  '(exists_generalization (eFresh_and eFresh_exists_same_var eFresh_exists_same_var) @
+    anim exists_intro_same_var exists_intro_same_var);
+theorem or_exists_forwards {x: EVar} (phi1 phi2: Pattern x):
+  $ (exists x (phi1 \/ phi2)) -> ((exists x phi1) \/ (exists x phi2)) $ =
+  '(exists_generalization (eFresh_or eFresh_exists_same_var eFresh_exists_same_var) @
+    orim exists_intro_same_var exists_intro_same_var);
+theorem or_exists_reverse {x: EVar} (phi1 phi2: Pattern x):
+  $ ((exists x phi1) \/ (exists x phi2)) -> (exists x (phi1 \/ phi2)) $ =
+  '(eori (exists_framing orl) (exists_framing orr));
+theorem or_exists_bi {x: EVar} (phi1 phi2: Pattern x):
+  $ (exists x (phi1 \/ phi2)) <-> ((exists x phi1) \/ (exists x phi2)) $ =
+  '(ibii or_exists_forwards or_exists_reverse);
+
+theorem and_exists_disjoint_forwards {x: EVar} (phi1: Pattern) (phi2: Pattern x):
+  $ (exists x (phi1 /\ phi2)) -> (phi1 /\ exists x phi2) $ =
+  '(iand
+    (rsyl (exists_framing anl) (exists_generalization_disjoint id))
+    (exists_framing anr));
+theorem and_exists_disjoint_reverse {x: EVar} (phi1: Pattern) (phi2: Pattern x):
+  $ (phi1 /\ exists x phi2) -> (exists x (phi1 /\ phi2)) $ =
+  '(impcom @ syl (anr imp_exists_disjoint) (exists_framing ian2));
+theorem and_exists_disjoint {x: EVar} (phi1: Pattern) (phi2: Pattern x):
+  $ (exists x (phi1 /\ phi2)) <-> (phi1 /\ exists x phi2) $ =
+  '(ibii and_exists_disjoint_forwards and_exists_disjoint_reverse);
+
+theorem and_exists_disjoint_r_forwards {x: EVar} (phi1: Pattern x) (phi2: Pattern):
+  $ (exists x (phi1 /\ phi2)) -> ((exists x phi1) /\ phi2) $ =
+  '(iand
+    (exists_framing anl)
+    (rsyl (exists_framing anr) (exists_generalization_disjoint id)));
+theorem and_exists_disjoint_r_reverse {x: EVar} (phi1: Pattern x) (phi2: Pattern):
+  $ ((exists x phi1) /\ phi2) -> (exists x (phi1 /\ phi2)) $ =
+  '(curry @ syl (anr imp_exists_disjoint) (exists_framing ian));
+theorem and_exists_disjoint_r {x: EVar} (phi1: Pattern x) (phi2: Pattern):
+  $ (exists x (phi1 /\ phi2)) <-> ((exists x phi1) /\ phi2) $ =
+  '(ibii and_exists_disjoint_r_forwards and_exists_disjoint_r_reverse);
+
+theorem framing_norm {box: SVar} (ctx: Pattern box) (phi1 phi2 rho1 rho2: Pattern)
+  (h1: $ Norm (app[ phi1 / box ] ctx) rho1 $)
+  (h2: $ Norm (app[ phi2 / box ] ctx) rho2 $)
+  (h3: $ phi1 -> phi2 $):
+  $ rho1 -> rho2 $ = '(norm (norm_imp h1 h2) @ framing h3);
+theorem singleton_norm {box1 box2: SVar} {x: EVar}
+  (ctx1 rho1 ctx2 rho2 phi: Pattern box1 box2 x)
+  (h1: $ Norm (app[ (eVar x) /\ phi / box1 ] ctx1) rho1 $)
+  (h2: $ Norm (app[ (eVar x) /\ ~phi / box2 ] ctx2) rho2 $):
+  $ ~(rho1 /\ rho2) $ =
+  '(norm (norm_not @ norm_and h1 h2) singleton);
+
+
+
+-- propagation of eSubst
+do {
+  (def (propag_e_subst_adv x ctx wo_x) @ if (not (== (lookup wo_x ctx) #undef)) 'eSubstitution_disjoint @ match ctx
+    [$bot$     'eSubstitution_disjoint]
+    [$top$     'eSubstitution_disjoint]
+    [$sym ,S$  'eSubstitution_disjoint]
+    [$sVar ,X$ 'eSubstitution_disjoint]
+    [$eVar ,y$ (if (== x y) 'eSubstitution_in_same_eVar 'eSubstitution_disjoint)]
+    [$imp ,phi1 ,phi2$       '(_eSubst_imp             ,(propag_e_subst_adv x phi1 wo_x) ,(propag_e_subst_adv x phi2 wo_x))]
+    [$app ,phi1 ,phi2$       '(_eSubst_app             ,(propag_e_subst_adv x phi1 wo_x) ,(propag_e_subst_adv x phi2 wo_x))]
+    [$exists ,y ,psi$ (if (== x y) 'eSubstitution_in_same_exists '(_eSubst_exists ,(propag_e_subst_adv x psi wo_x)))]
+    [$forall ,y ,psi$ (if (== x y) '(_eSubst_not eSubstitution_in_same_exists) '(_eSubst_not (_eSubst_exists (_eSubst_not ,(propag_e_subst_adv x psi wo_x)))))]
+    [$mu ,X ,psi$            '(_eSubst_mu              ,(propag_e_subst_adv x psi wo_x))]
+    [$not ,psi$              '(_eSubst_not             ,(propag_e_subst_adv x psi wo_x))]
+    [$or ,phi1 ,phi2$        '(_eSubst_or              ,(propag_e_subst_adv x phi1 wo_x) ,(propag_e_subst_adv x phi2 wo_x))]
+    [$and ,phi1 ,phi2$       '(_eSubst_and             ,(propag_e_subst_adv x phi1 wo_x) ,(propag_e_subst_adv x phi2 wo_x))]
+    [$_ceil  ,phi$           '(_eSubst_ceil            ,(propag_e_subst_adv x phi wo_x))]
+    [$_floor ,phi$           '(_eSubst_floor           ,(propag_e_subst_adv x phi wo_x))]
+    [$_subset ,phi1 ,phi2$   '(_eSubst_subset          ,(propag_e_subst_adv x phi1 wo_x) ,(propag_e_subst_adv x phi2 wo_x))]
+    [$equiv ,phi1 ,phi2$     '(_eSubst_equiv           ,(propag_e_subst_adv x phi1 wo_x) ,(propag_e_subst_adv x phi2 wo_x))]
+    [$_eq ,phi1 ,phi2$       '(_eSubst_eq              ,(propag_e_subst_adv x phi1 wo_x) ,(propag_e_subst_adv x phi2 wo_x))]
+    [$evSubst ,y ,phi ,psi$  (if (== x y)
+                             '(_eSubst_eSubst_same_var ,(propag_e_subst_adv x psi wo_x))
+                             '(_eSubst_eSubst          ,(propag_e_subst_adv x phi wo_x) ,(propag_e_subst_adv x psi wo_x)))]
+    [$svSubst ,X ,phi ,psi$  '(_eSubst_sSubst          ,(propag_e_subst_adv x phi wo_x) ,(propag_e_subst_adv x psi wo_x))]
+    [$ctxApp ,box ,ctx ,psi$ '(_eSubst_ctxApp          ,(propag_e_subst_adv x ctx wo_x) ,(propag_e_subst_adv x psi wo_x))]
+
+    [$epsilon$     'eSubstitution_disjoint]
+    [$top_letter$  'eSubstitution_disjoint]
+    [$a$           'eSubstitution_disjoint]
+    [$b$           'eSubstitution_disjoint]
+    [$top_word ,Y$ 'eSubstitution_disjoint]
+    [$concat ,psi1 ,psi2$    '(_eSubst_concat          ,(propag_e_subst_adv x psi1 wo_x) ,(propag_e_subst_adv x psi2 wo_x))]
+    [$nnimp ,phi1 ,phi2$     '(_eSubst_nnimp           ,(propag_e_subst_adv x phi1 wo_x) ,(propag_e_subst_adv x phi2 wo_x))]
+    [$kleene ,Y ,psi$        '(_eSubst_mu @ _eSubst_or eSubstitution_disjoint @ sSubst_concat ,(propag_e_subst_adv x psi wo_x) eSubstitution_disjoint)]
+    [_             'norm_refl]
+  )
+
+  (def (propag_e_subst x ctx) @ propag_e_subst_adv x ctx (atom-map!))
+
+  (def (propag_s_subst_adv X ctx wo_X) @ if (not (== (lookup wo_X ctx) #undef)) 'sSubstitution_disjoint @ match ctx
+    [$bot$     'sSubstitution_disjoint]
+    [$top$     'sSubstitution_disjoint]
+    [$sym ,S$  'sSubstitution_disjoint]
+    [$eVar ,x$ 'sSubstitution_disjoint]
+    [$sVar ,Y$ (if (== X Y) 'sSubstitution_in_same_sVar 'sSubstitution_disjoint)]
+    [$imp ,phi1 ,phi2$    '(_sSubst_imp             ,(propag_s_subst_adv X phi1 wo_X) ,(propag_s_subst_adv X phi2 wo_X))]
+    [$app ,phi1 ,phi2$    '(_sSubst_app             ,(propag_s_subst_adv X phi1 wo_X) ,(propag_s_subst_adv X phi2 wo_X))]
+    [$exists ,y ,psi$     '(_sSubst_exists_disjoint          ,(propag_s_subst_adv X psi wo_X))]
+    [$mu ,Y ,psi$ (if (== X Y) 
+                          'sSubstitution_in_same_mu 
+                          '(_sSubst_mu_disjoint     ,(propag_s_subst_adv X psi wo_X)))]
+    [$not ,psi$           '(_sSubst_not             ,(propag_s_subst_adv X psi wo_X))]
+    [$or ,phi1 ,phi2$     '(_sSubst_or              ,(propag_s_subst_adv X phi1 wo_X) ,(propag_s_subst_adv X phi2 wo_X))]
+    [$and ,phi1 ,phi2$    '(_sSubst_and             ,(propag_s_subst_adv X phi1 wo_X) ,(propag_s_subst_adv X phi2 wo_X))]
+    [$svSubst ,Y ,psi1 ,psi2$ (if (== X Y)
+                          '(_sSubst_sSubst_same_var ,(propag_s_subst_adv X psi1 wo_X) ,(propag_s_subst_adv X psi2 wo_X))
+                          (error "not implemented"))]
+
+    [$epsilon$    'sSubstitution_disjoint]
+    [$top_letter$ 'sSubstitution_disjoint]
+    [$a$          'sSubstitution_disjoint]
+    [$b$          'sSubstitution_disjoint]
+    [$concat ,psi1 ,psi2$ '(sSubst_concat          ,(propag_s_subst_adv X psi1 wo_X) ,(propag_s_subst_adv X psi2 wo_X))]
+    [$top_word ,Y$    (if (== X Y) 'sSubstitution_in_same_mu 'sSubstitution_disjoint)]
+    [$kleene ,Y ,psi$ (if (== X Y)
+                          'sSubstitution_in_same_mu
+                          '(_sSubst_mu_disjoint @ _sSubst_or sSubstitution_disjoint @ sSubst_concat ,(propag_s_subst_adv X psi wo_X) sSubstitution_disjoint))]
+    [$nnimp ,phi1 ,phi2$  '(_sSubst_nnimp           ,(propag_s_subst_adv X phi1 wo_X) ,(propag_s_subst_adv X phi2 wo_X))]
+    [_            'norm_refl]
+    -- [('e[ phi2 / y] psi) '()]
+    -- [('s[ phi2 / X] psi) '()]
+    -- [('app[ phi2 / box] psi) '()]
+    -- equiv forall
+  )
+
+  (def (propag_s_subst X ctx) @ propag_s_subst_adv X ctx (atom-map!))
+
+  (def (propag_e_subst_auto refine g) @ match g @ $ Norm (e[ ,phi_o / ,x_o ] ,ctx_o) ,res $ @ refine g (propag_e_subst x_o ctx_o))
+  (def (propag_s_subst_auto refine g) @ match g @ $ Norm (s[ ,phi_o / ,X_o ] ,ctx_o) ,res $ @ refine g (propag_s_subst X_o ctx_o))
+
+  (def dbg @ match-fn* [(x) (print x) x]
+    [(x y) (display @ string-append (->string x) ": " (->string y)) y])
+};
+
+theorem _sSubst_app {X: SVar} (phi phi1 phi2 psi1 psi2: Pattern X)
+  (h1: $ Norm (s[ phi / X ] phi1) psi1 $)
+  (h2: $ Norm (s[ phi / X ] phi2) psi2 $):
+  $ Norm (s[ phi / X ] (app phi1 phi2)) (app psi1 psi2) $ =
+  '(norm_trans sSubstitution_in_app (norm_app h1 h2));
+
+theorem _sSubst_imp {X: SVar} (phi phi1 phi2 psi1 psi2: Pattern X)
+  (h1: $ Norm (s[ phi / X ] phi1) psi1 $)
+  (h2: $ Norm (s[ phi / X ] phi2) psi2 $):
+  $ Norm (s[ phi / X ] (phi1 -> phi2)) (psi1 -> psi2) $ =
+  '(norm_trans sSubstitution_in_imp (norm_imp h1 h2));
+
+theorem _sSubst_mu {X Y: SVar} (phi psi rho: Pattern X Y)
+  (f : $ _sFresh Y phi $)
+  (h : $ Norm (s[ phi / X ] psi) rho $):
+  $ Norm (s[ phi / X ] (mu Y psi)) (mu Y rho) $
+  = '(norm_trans (sSubstitution_in_mu f) (norm_mu h));
+
+theorem _sSubst_mu_disjoint {X Y: SVar} (psi rho: Pattern X Y) (phi: Pattern X)
+  (h : $ Norm (s[ phi / X ] psi) rho $):
+  $ Norm (s[ phi / X ] (mu Y psi)) (mu Y rho) $
+  = '(_sSubst_mu sFresh_disjoint h);
+
+theorem _sSubst_not {X: SVar} (phi psi rho: Pattern X)
+  (h: $ Norm (s[ phi / X ] psi) rho $):
+  $ Norm (s[ phi / X ] (~ psi)) (~ rho) $ =
+  '(_sSubst_imp h sSubstitution_disjoint);
+
+theorem _sSubst_or {X: SVar} (phi phi1 phi2 psi1 psi2: Pattern X)
+  (h1: $ Norm (s[ phi / X ] phi1) psi1 $)
+  (h2: $ Norm (s[ phi / X ] phi2) psi2 $):
+  $ Norm (s[ phi / X ] (phi1 \/ phi2)) (psi1 \/ psi2) $ =
+  '(_sSubst_imp (_sSubst_not h1) h2);
+
+theorem _sSubst_or_l {X: SVar} (phi phi1 psi1: Pattern X) (phi2: Pattern)
+  (h: $ Norm (s[ phi / X ] phi1) psi1 $):
+  $ Norm (s[ phi / X ] (phi1 \/ phi2)) (psi1 \/ phi2) $ =
+  '(_sSubst_or h sSubstitution_disjoint);
+
+theorem _sSubst_or_r {X: SVar} (phi phi2 psi2: Pattern X) (phi1: Pattern)
+  (h: $ Norm (s[ phi / X ] phi2) psi2 $):
+  $ Norm (s[ phi / X ] (phi1 \/ phi2)) (phi1 \/ psi2) $ =
+  '(_sSubst_or sSubstitution_disjoint h);
+
+theorem _sSubst_and {X: SVar} (phi phi1 phi2 psi1 psi2: Pattern X)
+  (h1: $ Norm (s[ phi / X ] phi1) psi1 $)
+  (h2: $ Norm (s[ phi / X ] phi2) psi2 $):
+  $ Norm (s[ phi / X ] (phi1 /\ phi2)) (psi1 /\ psi2) $ =
+  '(_sSubst_not @ _sSubst_imp h1 (_sSubst_not h2));
+
+theorem _sSubst_exists {X: SVar} {x: EVar} (phi psi rho: Pattern X x)
+  (f: $ _eFresh x phi $)
+  (h: $ Norm (s[ phi / X ] psi) rho $):
+  $ Norm (s[ phi / X ] (exists x psi)) (exists x rho) $ =
+  '(norm_trans (sSubstitution_in_exists f) (norm_exists h));
+
+theorem _sSubst_exists_disjoint {X: SVar} {x: EVar} (psi rho: Pattern X x) (phi: Pattern X)
+  (h: $ Norm (s[ phi / X ] psi) rho $):
+  $ Norm (s[ phi / X ] (exists x psi)) (exists x rho) $ =
+  '(_sSubst_exists eFresh_disjoint h);
+
+theorem _sSubst_sSubst_same_var {X: SVar} (phi1 phi2 phi3 psi1 psi2: Pattern X)
+  (h1: $ Norm (s[ psi1 / X ] phi3) psi2 $)
+  (h2: $ Norm (s[ phi1 / X ] phi2) psi1 $):
+  $ Norm (s[ phi1 / X ] (s[ phi2 / X ] phi3)) psi2 $ =
+  '(norm_trans sSubstitution_in_sSubst_same_var @ norm_trans (norm_svSubst_pt norm_refl h2) h1);
+
+
+theorem _eSubst_exists {x y: EVar} (psi rho: Pattern x y) (phi: Pattern x)
+  (h: $ Norm (e[ phi / x ] psi) rho $):
+  $ Norm (e[ phi / x ] (exists y psi)) (exists y rho) $ =
+  '(norm_trans (eSubstitution_in_exists eFresh_disjoint) (norm_exists h));
+
+theorem _eSubst_app {x: EVar} (phi phi1 phi2 psi1 psi2: Pattern x)
+  (h1: $ Norm (e[ phi / x ] phi1) psi1 $)
+  (h2: $ Norm (e[ phi / x ] phi2) psi2 $):
+  $ Norm (e[ phi / x ] (app phi1 phi2)) (app psi1 psi2) $ =
+  '(norm_trans eSubstitution_in_app (norm_app h1 h2));
+
+theorem _eSubst_imp {x: EVar} (phi phi1 phi2 psi1 psi2: Pattern x)
+  (h1: $ Norm (e[ phi / x ] phi1) psi1 $)
+  (h2: $ Norm (e[ phi / x ] phi2) psi2 $):
+  $ Norm (e[ phi / x ] (phi1 -> phi2)) (psi1 -> psi2) $ =
+  '(norm_trans eSubstitution_in_imp (norm_imp h1 h2));
+
+theorem _eSubst_mu {x: EVar} {X: SVar} (psi rho: Pattern x X) (phi: Pattern x)
+  (h : $ Norm (e[ phi / x ] psi) rho $):
+  $ Norm (e[ phi / x ] (mu X psi)) (mu X rho) $ =
+  '(norm_trans (eSubstitution_in_mu sFresh_disjoint) (norm_mu h));
+
+theorem _eSubst_not {x: EVar} (phi psi rho: Pattern x)
+  (h: $ Norm (e[ phi / x ] psi) rho $):
+  $ Norm (e[ phi / x ] (~ psi)) (~ rho) $ =
+  '(_eSubst_imp h eSubstitution_disjoint);
+
+theorem _eSubst_or {x: EVar} (phi phi1 phi2 psi1 psi2: Pattern x)
+  (h1: $ Norm (e[ phi / x ] phi1) psi1 $)
+  (h2: $ Norm (e[ phi / x ] phi2) psi2 $):
+  $ Norm (e[ phi / x ] (phi1 \/ phi2)) (psi1 \/ psi2) $ =
+  '(_eSubst_imp (_eSubst_not h1) h2);
+
+theorem _eSubst_and {x: EVar} (phi phi1 phi2 psi1 psi2: Pattern x)
+  (h1: $ Norm (e[ phi / x ] phi1) psi1 $)
+  (h2: $ Norm (e[ phi / x ] phi2) psi2 $):
+  $ Norm (e[ phi / x ] (phi1 /\ phi2)) (psi1 /\ psi2) $ =
+  '(_eSubst_not @ _eSubst_imp h1 (_eSubst_not h2));
+
+theorem _eSubst_equiv {x: EVar} (phi phi1 phi2 psi1 psi2: Pattern x)
+  (h1: $ Norm (e[ phi / x ] phi1) psi1 $)
+  (h2: $ Norm (e[ phi / x ] phi2) psi2 $):
+  $ Norm (e[ phi / x ] (phi1 <-> phi2)) (psi1 <-> psi2) $ =
+  '(_eSubst_and (_eSubst_imp h1 h2) (_eSubst_imp h2 h1));
+
+theorem _eSubst_eSubst {x y: EVar} (phi1 phi2 psi rho1 rho2: Pattern x y)
+  (h1: $ Norm (e[ phi1 / x ] psi) rho1 $)
+  (h2: $ Norm (e[ phi1 / x ] phi2) rho2 $):
+  $ Norm (e[ phi1 / x ] (e[ phi2 / y ] psi)) (e[ rho2 / y ] rho1) $ =
+  '(norm_trans eSubstitution_in_eSubst @ norm_evSubst_pt h1 h2);
+
+theorem _eSubst_eSubst_same_var {x: EVar} (phi1 phi2 psi rho: Pattern x)
+  (h: $ Norm (e[ phi1 / x ] phi2) rho $):
+  $ Norm (e[ phi1 / x ] (e[ phi2 / x ] psi)) (e[ rho / x ] psi) $ =
+  '(norm_trans eSubstitution_in_eSubst_same_var @ norm_evSubst_pt norm_refl h);
+
+theorem _eSubst_sSubst {X: SVar} {x: EVar} (phi1 phi2 psi rho1 rho2: Pattern x X)
+  (h1: $ Norm (e[ phi1 / x ] psi) rho1 $)
+  (h2: $ Norm (e[ phi1 / x ] phi2) rho2 $):
+  $ Norm (e[ phi1 / x ] (s[ phi2 / X ] psi)) (s[ rho2 / X ] rho1) $ =
+  '(norm_trans eSubstitution_in_sSubst @ norm_svSubst_pt h1 h2);
+
+theorem _eSubst_ctxApp {box: SVar} {x: EVar} (phi1 phi2 psi rho1 rho2: Pattern x box)
+  (h1: $ Norm (e[ phi1 / x ] psi) rho1 $)
+  (h2: $ Norm (e[ phi1 / x ] phi2) rho2 $):
+  $ Norm (e[ phi1 / x ] (app[ phi2 / box ] psi)) (app[ rho2 / box ] rho1) $ =
+  '(norm_trans eSubstitution_in_appCtx @ norm_ctxApp_pt h1 h2);
+
+--- Tests for LISP based tactic -------------------------------------
+---------------------------------------------------------------------
+
+theorem example_1 {X: SVar} (phi: Pattern):
+  $ Norm (s[ phi / X ] (sVar X)) phi $ =
+  propag_s_subst_auto;
+
+-- theorem example_1_e {x: EVar} (phi: Pattern):
+--   $ Norm (e[ phi / x ] (eVar x)) phi $ =
+--   propag_e_subst_auto;
+
+theorem example_2 {X: SVar} (phi: Pattern):
+  $ Norm (s[ phi / X ] (app bot (sVar X))) (app bot phi) $ =
+  propag_s_subst_auto;
+
+theorem example_3 {X: SVar} (phi psi: Pattern X):
+  $ Norm (s[ phi / X ] (imp psi (sVar X))) (imp (s[ phi / X ] psi) phi) $ =
+  propag_s_subst_auto;
+
+theorem example_4 {X Y: SVar} (phi: Pattern):
+  $ Norm (s[ phi / X ] (mu Y (sVar X))) (mu Y phi) $ =
+  propag_s_subst_auto;
+
+theorem example_5 {Y: SVar} (phi: Pattern):
+  $ Norm (s[ phi / Y ] (mu Y (sVar Y))) (mu Y (sVar Y)) $ =
+  propag_s_subst_auto;
+
+theorem example_6 {X: SVar} (phi psi: Pattern X):
+  $ Norm (~ (s[ phi / X ] (imp psi (sVar X)))) (~ (imp (s[ phi / X ] psi) phi)) $ =
+  '(norm_not ,(propag_s_subst 'X $ (imp psi (sVar X)) $ ));
+
+theorem eVar_example_6 {x: EVar} (phi psi: Pattern x):
+  $ Norm (~ (e[ phi / x ] (imp psi (~ (eVar x))))) (~ (imp (e[ phi / x ] psi) (~ phi))) $ =
+  '(norm_not ,(propag_e_subst 'x $ (imp psi (~ (eVar x))) $ ));
+
+--- Helpers ---------------------------------------------------------
+---------------------------------------------------------------------
+
+theorem norm_lemma
+  (h1: $ Norm phi psi $)
+  (h2: $ psi -> rho $):
+  $ phi -> rho $ =
+  '(norm (norm_imp_l @ norm_sym h1) h2);
+
+theorem norm_lemma_r
+  (h1: $ Norm rho psi $)
+  (h2: $ phi -> psi $):
+  $ phi -> rho $ =
+  '(norm (norm_imp_r @ norm_sym h1) h2);

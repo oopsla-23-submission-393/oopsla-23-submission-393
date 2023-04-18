@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "matching-logic-mm0"
+version = "0.1.0"
+description = "A formalization of Matching Logic in Metamath Zero"
+authors = [
+    "Submission 393 <ooplsa-23-subission-393@example.com>",
+]
+
+[tool.poetry.dependencies]
+python = ">3.9"
+pytest = "^7.2.2"
+hypothesis = "^6.70.0"
+mypy = "^1.1.1"
+types-tabulate = "^0.9.0.1"

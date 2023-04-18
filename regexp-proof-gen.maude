@@ -1,0 +1,856 @@
+fmod PATTERN-METAMATH is
+    protecting QID-LIST .
+    sorts Symbol SVar EVar Pattern .
+    subsorts Symbol SVar EVar < Pattern .
+
+    *** Core ***************************************
+    op sVar _ : Qid -> SVar [ctor] .
+    op eVar _ : Qid -> EVar [ctor] .
+    op sym  _ : Qid -> Symbol [ctor] .
+    op app _ _ : Pattern Pattern -> Pattern [ctor] .
+    op _ -> _  : Pattern Pattern -> Pattern [ctor] .
+    op mu _ _  : Qid     Pattern -> Pattern [ctor] .
+    op bot         : -> Pattern [ctor] .
+    op exists _ _ : Qid Pattern -> Pattern [ctor] .
+    op dummy : -> Qid [ctor] .
+
+    op app[ _ / _ ] _ : Pattern Qid Pattern -> Pattern [ctor] .
+
+    *** Meta variables *************************
+    vars phi phi1 phi2 psi psi1 psi2 : Pattern .
+    vars ctx : Pattern .
+    vars x y X Y Q : Qid .
+    vars QL QL1 QL2 : QidList .
+    vars N : Nat .
+    vars Notation : Notation .
+
+    *** Notation ****************************************
+    --- The desugar operation is defined over Notation,
+    --- and allows us to replace a single notation with
+    --- its definition. Note that this isn't intended to
+    --- completely elemenate notation from a pattern
+    --- but to merely remove one layer of sugar.
+    sort Notation .
+    subsort Notation < Pattern .
+    op desugar : Notation -> Pattern .
+
+    *** Standard sugar **********************************
+    op ~ _          : Pattern         -> Notation [ctor] .
+    op _ \/ _       : Pattern Pattern -> Notation [ctor] .
+    op _ /\ _       : Pattern Pattern -> Notation [ctor] .
+    op nu _ _       : Qid Pattern     -> Notation [ctor] .
+    op forall _ _   : Qid Pattern     -> Notation [ctor] .
+
+    eq desugar(~ phi) = phi -> bot .
+    eq desugar(phi \/ psi) = ~ phi -> psi .
+    eq desugar(phi /\ psi) = ~ (phi -> ~ psi) .
+    eq desugar(nu X phi) = ~ (mu X substitute [ ~ sVar X / X ] in ~ phi) .
+    eq desugar(forall x phi) = ~ (exists x ~ phi) .
+
+    *** Definedness *************************************
+    op ceil : Pattern -> Notation [ctor] .
+    op floor : Pattern -> Notation [ctor] .
+    op _ C= _ : Pattern Pattern -> Notation .
+    op [[ ctximp-app _ _ _ ]] : Qid Pattern Pattern -> Notation .
+
+    eq desugar(ceil(phi)) = app (sym 'defSym) phi .
+    eq desugar(floor(phi)) = ~ ceil(~ phi) .
+    eq desugar(phi C= psi) = floor(phi -> psi) .
+    eq desugar([[ ctximp-app X ctx phi ]])
+     =  exists dummy (eVar dummy /\ ((app[ eVar dummy / X ] ctx) C= phi)) .
+
+    *** ERE *********************************************
+    op epsilon      :                 -> Notation [ctor] .
+    --- TODO: Ideally, we'd want to be parametric over an alphabet.
+    --- However, two letters are enough to encode all words.
+    sort Letter .
+    subsort Letter < Notation .
+    op a            :                 -> Letter [ctor] .
+    op b            :                 -> Letter [ctor] .
+    op [[ kleene _ _ ]] : Qid Pattern   -> Notation [ctor prec 25] .
+    op top-letter   :                 -> Notation [ctor] .
+    op kleene _ _   : Qid Pattern     -> Notation [ctor prec 25] .
+    op top-word _   : Qid             -> Notation [ctor] .
+    op _ . _        : Pattern Pattern -> Notation [ctor prec 28] .
+
+    eq desugar(epsilon) = sym 'epsilon-symbol .
+    eq desugar(a) = sym 'a-symbol .
+    eq desugar(b) = sym 'b-symbol .
+    eq desugar(top-letter) = a \/ b .
+    eq desugar([[ kleene X phi ]]) = mu X (epsilon \/ (phi . sVar X)) .
+    eq desugar(top-word X) = [[ kleene X top-letter ]] .
+    eq desugar(phi . psi) = ( app ( app ( sym 'concat-symbol ) phi ) psi ) .
+
+    op (derivative _ _) : Pattern Pattern -> Pattern [ctor] .
+
+    *** ERE sugar *****************************************
+    --- This sugar is only for use by the user, and not for
+    --- use on the left-hand-side of an equation or rule.
+
+    vars Alpha Beta Gamma : Pattern .
+    op top : -> Pattern .
+    eq top = ~ bot .
+    op _ + _        : Pattern Pattern -> Pattern [prec 30] .
+    eq Alpha + Beta = Alpha \/ Beta .
+    op _ *          : Pattern -> Pattern [prec 30] .
+    eq Alpha * = [[ kleene 'Xk Alpha ]] .
+    op _ ->> _        : Pattern Pattern -> Pattern [prec 31] .
+    eq Alpha ->> Beta = (~ Alpha) \/ Beta .
+    op _ <<->> _       : Pattern Pattern -> Pattern [prec 32] .
+    eq Alpha <<->> Beta = (Alpha ->> Beta) /\ (Beta ->> Alpha) .
+
+    *** ERE Benchmarks **************************************************
+    --- The following patterns are EREs we generate to use as benchmarks.
+
+    --- n-fold concatenation (right).
+    op _ ^r _ : Pattern Nat -> Pattern .
+    eq (Alpha ^r 0) = epsilon .
+    eq (Alpha ^r (s N)) = (Alpha . (Alpha ^r N)) .
+
+    --- n-fold concatenation (left).
+    op _ ^l _ : Pattern Nat -> Pattern .
+    eq (Alpha ^l 0) = epsilon .
+    eq (Alpha ^l (s N)) = ((Alpha ^l N) . Alpha) .
+
+    op match-l : Nat -> Pattern .
+    eq match-l(N) = (a ^l N) ->> ((a + epsilon) ^l N) . (a ^l N) .
+
+    op match-r : Nat -> Pattern .
+    eq match-r(N) = (a ^r N) ->> ((a + epsilon) ^r N) . (a ^r N) .
+
+    op as-of-len-l : Nat -> Pattern .
+    eq as-of-len-l(0) = epsilon .
+    eq as-of-len-l(s(N)) = (a ^l s(N)) + as-of-len-l(N) .
+
+    op as-of-len-r : Nat -> Pattern .
+    eq as-of-len-r(0) = epsilon .
+    eq as-of-len-r(s(N)) = (a ^r s(N)) + as-of-len-r(N) .
+
+    op eq-l : Nat -> Pattern .
+    eq eq-l(N) = [[ kleene 'X a ]] ->> as-of-len-l(N) . [[ kleene 'X (a ^l N) ]] .
+
+    op eq-r : Nat -> Pattern .
+    eq eq-r(N) = [[ kleene 'X a ]] ->> as-of-len-r(N) . [[ kleene 'X (a ^r N) ]] .
+
+    op eq-lr : Nat -> Pattern .
+    eq eq-lr(N) = (((a + epsilon) ^l N) . [[ kleene 'X (a ^l N) ]] ) ->> ((a + epsilon) ^r N) . [[ kleene 'X (a ^r N) ]] .
+
+    *** Helpers ***************************************************
+
+    op isConjunction : Pattern -> Bool .
+    eq isConjunction(phi /\ psi) = true .
+    eq isConjunction(phi) = false [owise].
+
+    op isDisjunction : Pattern -> Bool .
+    eq isDisjunction(phi \/ psi) = true .
+    eq isDisjunction(phi) = false [owise].
+
+    op substitute [ _ / _ ] in _ : Pattern Qid Pattern -> Pattern .
+    eq substitute [ phi / X ] in sVar X = phi .
+   ceq substitute [ phi / X ] in sVar Y = sVar Y if X =/= Y .
+    eq substitute [ phi / X ] in mu X psi = mu X psi .
+   ceq substitute [ phi / X ] in mu Y psi = mu Y (substitute [ phi / X ] in psi) if X =/= Y .
+    eq substitute [ phi / X ] in (psi1 \/ psi2) = (substitute [ phi / X ] in psi1) \/ (substitute [ phi / X ] in psi2) .
+    eq substitute [ phi / X ] in epsilon = epsilon .
+    eq substitute [ phi / X ] in a = a .
+    eq substitute [ phi / X ] in b = b .
+    eq substitute [ phi / X ] in top-letter = top-letter .
+    eq substitute [ phi / X ] in (psi1 . psi2)
+     = (substitute [ phi / X ] in psi1) . (substitute [ phi / X ] in psi2) .
+    eq substitute [ phi / X ] in [[ ctximp-app Y psi1 psi2 ]]
+     = [[ ctximp-app Y (substitute [ phi / X ] in psi1) (substitute [ phi / X ] in psi2) ]] .
+
+    op all-sVars : Pattern -> QidList .
+    eq all-sVars(Notation) = all-sVars(desugar(Notation)) .
+    eq all-sVars(bot) = nil .
+    eq all-sVars(sVar X) = X .
+    eq all-sVars(eVar X) = nil .
+    eq all-sVars(sym  X) = nil .
+    eq all-sVars(phi -> psi)  = all-sVars(phi) minus(all-sVars(psi), all-sVars(phi)) .
+    eq all-sVars(app[ phi / X ] psi) = all-sVars(phi) minus(all-sVars(psi), all-sVars(phi)) .
+    eq all-sVars(app phi psi) = all-sVars(phi) minus(all-sVars(psi), all-sVars(phi)) .
+    eq all-sVars(mu X phi) = X minus(all-sVars(phi), X) .
+    eq all-sVars(exists X phi) = all-sVars(phi) .
+
+    op all-eVars : Pattern -> QidList .
+    eq all-eVars(Notation) = all-eVars(desugar(Notation)) .
+    eq all-eVars(bot) = nil .
+    eq all-eVars(sVar X) = nil .
+    eq all-eVars(eVar X) = X .
+    eq all-eVars(sym  X) = nil .
+    eq all-eVars(phi -> psi)  = all-eVars(phi) minus(all-eVars(psi), all-eVars(phi)) .
+    eq all-eVars(app[ phi / X ] psi) = all-eVars(phi) minus(all-eVars(psi), all-eVars(phi)) .
+    eq all-eVars(app phi psi) = all-eVars(phi) minus(all-eVars(psi), all-eVars(phi)) .
+    eq all-eVars(mu X phi) = all-eVars(phi) .
+    eq all-eVars(exists X phi) = X minus(all-eVars(phi), X) .
+
+    op minus : QidList QidList -> QidList .
+    eq minus(nil, QL) = nil .
+   ceq minus(Q QL1, QL2) =   minus(QL1, QL2) if     occurs(Q, QL2) .
+   ceq minus(Q QL1, QL2) = Q minus(QL1, QL2) if not occurs(Q, QL2) .
+
+    op occursIn : Qid Pattern -> Bool .
+    eq occursIn(X, phi) = occurs(X, all-sVars(phi)) or occurs(X, all-eVars(phi)) .
+
+    op hasEWP : Pattern -> Bool .
+    eq hasEWP(bot) = false .
+    eq hasEWP(top) = true .
+    eq hasEWP(L:Letter) = false .
+    eq hasEWP(epsilon) = true .
+    eq hasEWP(phi /\ psi) = hasEWP(phi) and hasEWP(psi) .
+    eq hasEWP(phi . psi) = hasEWP(phi) and hasEWP(psi) .
+    eq hasEWP(phi \/ psi) = hasEWP(phi) or hasEWP(psi) .
+    eq hasEWP([[ kleene X phi ]]) = true .
+    eq hasEWP(~ phi) = not hasEWP(phi) .
+endfm
+
+*** Comparing Patterns ******************************************************
+--- Since MM0 does not natively support associativity and commutativity,
+--- we must generate the corresponding theorem applications when we need to
+--- rearrange terms. Currently, this is only in the case of the application
+--- of the idempotency axiom. To enable the idempotency rule, the identical
+--- patterns must neighbour each other in a conjunction or disjunction.
+--- This is done by sorting the patterns in a conjunct/disjunct according to
+--- some arbitary total order, defined in the following module.
+
+fmod PATTERN-METAMATH-COMPARE is
+    including PATTERN-METAMATH .
+
+    vars phi phi1 phi2 psi psi1 psi2 : Pattern .
+    vars x y X Y : Qid .
+
+    --- Internal sorting of patterns
+    sort Comparison .
+    ops LT EQ GT : -> Comparison [ctor] .
+
+    op rank : Pattern -> Nat .
+    eq rank(bot) = 0 .
+    eq rank(epsilon) = 1 .
+    eq rank(a) = 2 .
+    eq rank(b) = 3 .
+    eq rank(top) = 4 .
+    eq rank([[ kleene X phi ]]) = 5 .
+    eq rank(~ phi) = 6 .
+    eq rank(phi1 . phi2) = 7 .
+    eq rank(phi1 /\ phi2) = 8 .
+    eq rank(phi1 \/ phi2) = 9 .
+    eq rank(phi1 -> phi2) = 10 .
+    eq rank(derivative phi1 phi2) = 11 .
+
+    op pair : Pattern Pattern -> PatternPair [ctor] .
+
+    sort PatternPair .
+    op compare : PatternPair PatternPair -> Comparison .
+   ceq compare(pair(phi1, phi2), pair(psi1, psi2)) = compare(phi2, psi2) if compare(phi1, psi1) = EQ .
+    eq compare(pair(phi1, phi2), pair(psi1, psi2)) = compare(phi1, psi1) [owise] .
+
+    op compare : Pattern Pattern -> Comparison .
+    eq compare(phi, phi) = EQ .
+   ceq compare(phi, psi) = LT if rank(phi) < rank(psi) .
+   ceq compare(phi, psi) = GT if rank(phi) > rank(psi) .
+    eq compare([[ kleene X phi ]], [[kleene X psi ]]) = compare(phi, psi) .
+    eq compare(~ phi, ~ psi) = compare(phi, psi) .
+    eq compare(phi1 . phi2, psi1 . psi2) = compare(pair(phi1, phi2), pair(psi1, psi2)) .
+    eq compare(phi1 /\ phi2, psi1 /\ psi2) = compare(pair(phi1, phi2), pair(psi1, psi2)) .
+    eq compare(phi1 \/ phi2, psi1 \/ psi2) = compare(pair(phi1, phi2), pair(psi1, psi2)) .
+    eq compare(phi1 -> phi2, psi1 -> psi2) = compare(pair(phi1, phi2), pair(psi1, psi2)) .
+    eq compare(derivative phi1 phi2, derivative psi1 psi2) = compare(pair(phi1, phi2), pair(psi1, psi2)) .
+endfm
+
+mod ERE-THEOREMS is
+    protecting PATTERN-METAMATH-COMPARE .
+    protecting META-TERM . --- TODO: I think this is required due to a bug in maude 2.7
+                           --- I get this warning: Advisory: could not find sort Sort in meta-module ERE-THEOREMS.
+                           --- Does this go away in newer versions of Maude?
+
+    vars Alpha Alpha1 Alpha2 : Pattern .
+    vars Beta  Beta1  Beta2  : Pattern .
+    vars Gamma : Pattern .
+    vars A B A1 A2 : Letter .
+    vars X Y : Qid .
+
+    rl [regex_eq_der_bot]     : (derivative A bot)          => bot .
+    rl [regex_eq_der_epsilon] : (derivative A epsilon)      => bot .
+    rl [regex_eq_der_same_a]  : (derivative A A)            => epsilon .
+   crl [regex_eq_der_diff_a]  : (derivative A B)            => bot if A =/= B .
+
+    rl [regex_eq_der_kleene]  : (derivative A [[kleene X Alpha]])
+                                                               => (derivative A Alpha) . [[kleene X Alpha]] .
+    rl [regex_eq_der_concat]  : (derivative A (Alpha . Beta))  => ((derivative A Alpha) . Beta) \/  ((epsilon /\ Alpha) . (derivative A Beta)) .
+    rl [regex_eq_der_choice]  : (derivative A (Alpha \/ Beta)) => (derivative A Alpha) \/ (derivative A Beta) .
+    rl [regex_eq_der_conj]    : (derivative A (Alpha /\ Beta)) => (derivative A Alpha) /\ (derivative A Beta) .
+    rl [regex_eq_der_neg]     : (derivative A ~ Alpha)         => ~ (derivative A Alpha) .
+
+    rl [regex_eq_ewp_bot]     : epsilon /\ bot             => bot .
+    rl [regex_eq_ewp_epsilon] : epsilon /\ epsilon         => epsilon .
+    rl [regex_eq_ewp_a]       : epsilon /\ a               => bot .
+    rl [regex_eq_ewp_b]       : epsilon /\ b               => bot .
+    rl [regex_eq_ewp_concat]  : epsilon /\ (Alpha . Beta)  => (epsilon /\ Alpha) /\ (epsilon /\ Beta) .
+    rl [regex_eq_ewp_choice]  : epsilon /\ (Alpha \/ Beta) => (epsilon /\ Alpha) \/ (epsilon /\ Beta) .
+    rl [regex_eq_ewp_kleene]  : epsilon /\ [[kleene X Alpha]]      => epsilon .
+
+    rl [regex_eq_ewp_not_bot]     : epsilon /\ ~(bot)           => epsilon .
+    rl [regex_eq_ewp_not_eps]     : epsilon /\ ~(epsilon)       => bot .
+    rl [regex_eq_ewp_not_a]       : epsilon /\ ~(a)             => epsilon .
+    rl [regex_eq_ewp_not_b]       : epsilon /\ ~(b)             => epsilon .
+    rl [regex_eq_ewp_not_concat]  : epsilon /\ ~(Alpha . Beta)  => (epsilon /\ ~ Alpha) \/ (epsilon /\ ~ Beta) .
+    rl [regex_eq_ewp_not_and]     : epsilon /\ ~(Alpha /\ Beta) => (epsilon /\ ~ Alpha) \/ (epsilon /\ ~ Beta) .
+    rl [regex_eq_ewp_not_choice]  : epsilon /\ ~(Alpha \/ Beta) => (epsilon /\ ~ Alpha) /\ (epsilon /\ ~ Beta) .
+    rl [regex_eq_ewp_not_kleene]  : epsilon /\ ~ ([[ kleene X Alpha ]]) => bot .
+    rl [regex_eq_ewp_not_not]     : epsilon /\ ~(~ Alpha)       => epsilon /\ Alpha .
+
+    --- Identity and idemoptency of \/
+    rl [regex_eq_or_choice_abs] : (~ bot)   \/ Alpha => (~ bot) .
+    rl [regex_eq_or_choice_unit] : bot   \/ Alpha => Alpha .
+    rl [regex_eq_or_choice_idem_leaf] : Alpha \/ Alpha => Alpha .
+    rl [regex_eq_or_choice_idem_node] : Alpha \/ (Alpha \/ Beta) => Alpha \/ Beta .
+    rl [regex_eq_or_choice_assoc] : (Alpha \/ Beta) \/ Gamma  => Alpha \/ (Beta \/ Gamma) .
+   crl [regex_eq_or_choice_comm_node] : Alpha \/ (Beta \/ Gamma) => Beta \/ (Alpha \/ Gamma) if compare(Alpha, Beta) = GT .
+   crl [regex_eq_or_choice_comm_leaf] : Alpha \/ Beta => Beta \/ Alpha if compare(Alpha, Beta) == GT and not isDisjunction(Beta) .
+
+    --- Identity and idemoptency of /\
+    rl [regex_eq_and_choice_abs] : bot   /\ Alpha => bot .
+    rl [regex_eq_and_choice_unit] : (~ bot)   /\ Alpha => Alpha .
+    rl [regex_eq_and_choice_idem_leaf] : Alpha /\ Alpha => Alpha .
+    rl [regex_eq_and_choice_idem_node] : Alpha /\ (Alpha /\ Beta) => Alpha /\ Beta .
+    rl [regex_eq_and_choice_assoc] : (Alpha /\ Beta) /\ Gamma  => Alpha /\ (Beta /\ Gamma) .
+   crl [regex_eq_and_choice_comm_node] : Alpha /\ (Beta /\ Gamma) => Beta /\ (Alpha /\ Gamma) if compare(Alpha, Beta) = GT .
+   crl [regex_eq_and_choice_comm_leaf] : Alpha /\ Beta => Beta /\ Alpha if compare(Alpha, Beta) == GT and not isConjunction(Beta) .
+
+    ---- Optional simplifications
+    rl [regex_eq_bot_concat_l] : bot . Alpha => bot .
+    rl [regex_eq_bot_concat_r] : Alpha . bot => bot .
+
+    rl [regex_eq_eps_concat_l] : epsilon . Alpha => Alpha .
+    rl [regex_eq_eps_concat_r] : Alpha . epsilon => Alpha .
+
+    rl [regex_eq_double_neg] : ~ ~ Alpha => Alpha .
+    rl [regex_eq_double_kleene] : [[ kleene X [[ kleene Y Alpha ]] ]] => [[ kleene X Alpha ]] .
+
+    rl [regex_eq_eps_kleene] : [[ kleene X epsilon ]] => epsilon .
+    rl [regex_eq_bot_kleene] : [[ kleene X bot ]] => epsilon .
+
+
+    *** Rules *********************************
+    *******************************************
+
+    sort State .
+    op < _ > : Pattern -> State [ctor] .
+   crl [der-a] : < Alpha > => < (derivative a Alpha) > if hasEWP(Alpha) .
+   crl [der-b] : < Alpha > => < (derivative b Alpha) > if hasEWP(Alpha) .
+endm
+
+fmod MM0 is
+    protecting QID-LIST .
+    protecting PATTERN-METAMATH .
+    sort MM0SExpr NeMM0SExprList MM0SExprList .
+    subsort Qid < MM0SExpr < NeMM0SExprList < MM0SExprList .
+    subsort NeQidList < NeMM0SExprList .
+    subsort QidList < MM0SExprList .
+
+    --- We use square brackets instead of parens for S-Expressions since Maude treats parens specially.
+    --- We use *double* square brackets since single square brackets conflicts with META-TERM syntax.
+    op [[ _ ]] : NeMM0SExprList -> MM0SExpr .
+    op _ _ : MM0SExprList MM0SExprList -> MM0SExprList [ctor ditto].
+    op _ _ : NeMM0SExprList MM0SExprList -> NeMM0SExprList [ctor ditto].
+    op _ _ : MM0SExprList NeMM0SExprList -> NeMM0SExprList [ctor ditto].
+
+    sort MM0Decl MM0Binder .
+    op _ _ : MM0Decl MM0Decl -> MM0Decl [ctor assoc format(d n d)] .
+    op theorem _ _ colon $ _ $           ; : Qid MM0Binder Pattern          -> MM0Decl .
+    op theorem _ _ colon $ _ $ = quote _ ; : Qid MM0Binder Pattern MM0SExpr -> MM0Decl .
+    op theorem _ _ colon $ _ $ = _ ; : Qid MM0Binder Pattern MM0SExpr -> MM0Decl .
+    op pub _ : MM0Decl -> MM0Decl .
+    op no-binders : -> MM0Binder [ctor] .
+    op { _ colon SVar } : QidList -> MM0Binder [ctor] .
+    eq { nil colon SVar } = no-binders .
+
+    --- Optimizations
+    var CongThm : Qid .
+    vars MM0SEVar1 MM0SEVar2 MM0SEVar3 : MM0SExpr .
+    eq [[ 'apply-equiv MM0SEVar1 [[ 'apply-equiv MM0SEVar2 MM0SEVar3 ]] ]] =
+       [[ 'apply-equiv [[ 'bitri MM0SEVar1 MM0SEVar2 ]] MM0SEVar3 ]] .
+    eq [[ 'bitri [[ CongThm MM0SEVar1 ]] [[ 'bitri [[ CongThm MM0SEVar2 ]] MM0SEVar3 ]] ]] =
+       [[ 'bitri [[ CongThm [[ 'bitri MM0SEVar1 MM0SEVar2 ]] ]] MM0SEVar3 ]] .
+    eq [[ 'bitri [[ CongThm MM0SEVar1 ]] [[ CongThm MM0SEVar2 ]] ]] =
+       [[ CongThm [[ 'bitri MM0SEVar1 MM0SEVar2 ]] ]] .
+
+endfm
+
+--- Manually performs a search, and returns the search graph as a tree with backlinks.
+mod PROOF-GEN is
+    extending ERE-THEOREMS .
+    protecting MM0 .
+    protecting META-LEVEL .
+    protecting NAT .
+
+    sorts Edge NeEdges Edges Node EdgeLabel .
+    subsorts Edge < NeEdges < Edges .
+    op none : -> Edges [ctor] .
+    op eqEdge : EdgeLabel Node -> Edge [ctor] .
+    op rlEdge : EdgeLabel Node -> Edge [ctor] .
+    op _ ; _ : NeEdges NeEdges -> NeEdges [ctor assoc comm id: none] .
+    op _ ; _ : Edges Edges -> Edges [ditto] .
+
+    op applResult : Qid Context Substitution -> EdgeLabel [ctor] .
+
+    op node : State Edges -> Node [ctor] .
+    op backlink : State -> Node [ctor] .
+    op depthReached : State -> Node [ctor] .
+
+    var NAT : Nat .
+    vars Es : NeEdges . vars Es? : Edges .
+    vars T T1 T2 T3 : Term . vars TL TL' : TermList .
+    vars P : Pattern .
+    vars S : State . vars SL SL' : StateList .
+    vars X Y Z R Q : Qid . vars Result : Result4Tuple .
+    vars Es1 Es2 : NeEdges .
+    vars EL : EdgeLabel .
+    vars N N_EWP N_A N_B : Node .
+    vars Subst Subst_EWP Subst_A Subst_B : Substitution .
+    vars Ctx CtxEWP Ctx_A Ctx_B : Context .
+
+    op getState : Node -> State .
+    eq getState(node(S, Es?)) = S .
+    eq getState(backlink(S)) = S .
+    eq getState(depthReached(S)) = S .
+
+    sorts NeStateList StateList .
+    subsort State < NeStateList < StateList .
+
+    op empty : -> StateList [ctor] .
+    op _,_ : NeStateList StateList -> NeStateList [ctor assoc id: empty gather (e E) prec 121] . --- Same as TermList
+    op _,_ : StateList NeStateList -> NeStateList [ctor ditto] .
+    op _,_ : StateList StateList -> StateList [ctor ditto] .
+
+    op _ in _ : State StateList -> Bool .
+    eq S in (SL , S , SL') = true .
+    eq S in SL = false [owise] .
+
+   --- curr term, previous terms, depth
+    op mkProofHint : State StateList Nat -> Node .
+   ceq mkProofHint(S, SL, NAT) = backlink(S)                              if      S in SL .
+   ceq mkProofHint(S, SL, NAT) = node(S, applyAnyEquation(S, SL, NAT))      if (not S in SL) /\ Es := applyAnyEquation(S, SL, NAT) .
+   ceq mkProofHint(S, SL, s(NAT)) = node(S, applyAllRules(S, (SL, S), NAT)) if (not S in SL) /\ none = applyAnyEquation(S, SL, NAT) .
+   ceq mkProofHint(S, SL, 0) = depthReached(S)                          if (not S in SL) /\ none = applyAnyEquation(S, SL, 0) .
+
+    op applyAnyEquation : State StateList Nat -> Edges .
+    eq applyAnyEquation(S, SL, NAT) =
+        applyEq(S, SL, NAT, 'regex_eq_der_bot) or-else
+        applyEq(S, SL, NAT, 'regex_eq_der_epsilon) or-else
+        applyEq(S, SL, NAT, 'regex_eq_der_same_a) or-else
+        applyEq(S, SL, NAT, 'regex_eq_der_diff_a) or-else
+        applyEq(S, SL, NAT, 'regex_eq_der_kleene) or-else
+        applyEq(S, SL, NAT, 'regex_eq_der_concat) or-else
+        applyEq(S, SL, NAT, 'regex_eq_der_choice) or-else
+        applyEq(S, SL, NAT, 'regex_eq_der_conj) or-else
+        applyEq(S, SL, NAT, 'regex_eq_der_neg) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_bot) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_epsilon) or-else
+
+        applyEq(S, SL, NAT, 'regex_eq_ewp_a) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_b) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_concat) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_choice) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_kleene) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_bot) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_eps) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_a) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_b) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_concat) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_and) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_choice) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_kleene) or-else
+        applyEq(S, SL, NAT, 'regex_eq_ewp_not_not) or-else
+
+        applyEq(S, SL, NAT, 'regex_eq_or_choice_abs) or-else
+        applyEq(S, SL, NAT, 'regex_eq_or_choice_unit) or-else
+        applyEq(S, SL, NAT, 'regex_eq_or_choice_idem_node) or-else
+        applyEq(S, SL, NAT, 'regex_eq_or_choice_idem_leaf) or-else
+        applyEq(S, SL, NAT, 'regex_eq_or_choice_assoc) or-else
+        applyEq(S, SL, NAT, 'regex_eq_or_choice_comm_node) or-else
+        applyEq(S, SL, NAT, 'regex_eq_or_choice_comm_leaf) or-else
+
+        applyEq(S, SL, NAT, 'regex_eq_and_choice_abs) or-else
+        applyEq(S, SL, NAT, 'regex_eq_and_choice_unit) or-else
+        applyEq(S, SL, NAT, 'regex_eq_and_choice_idem_node) or-else
+        applyEq(S, SL, NAT, 'regex_eq_and_choice_idem_leaf) or-else
+        applyEq(S, SL, NAT, 'regex_eq_and_choice_assoc) or-else
+        applyEq(S, SL, NAT, 'regex_eq_and_choice_comm_node) or-else
+        applyEq(S, SL, NAT, 'regex_eq_and_choice_comm_leaf) or-else
+
+        applyEq(S, SL, NAT, 'regex_eq_bot_concat_l) or-else
+        applyEq(S, SL, NAT, 'regex_eq_bot_concat_r) or-else
+        applyEq(S, SL, NAT, 'regex_eq_eps_concat_l) or-else
+        applyEq(S, SL, NAT, 'regex_eq_eps_concat_r) or-else
+        applyEq(S, SL, NAT, 'regex_eq_double_neg) or-else
+        applyEq(S, SL, NAT, 'regex_eq_double_kleene) or-else
+        applyEq(S, SL, NAT, 'regex_eq_eps_kleene) or-else
+        applyEq(S, SL, NAT, 'regex_eq_bot_kleene)
+        .
+
+    --- The strat attribute is needed to get decent preformance.
+    --- Otherwise, it would compute all possible outward edges and throw all but one away,
+    --- leading to exponential complexity.
+    op _ or-else _ : Edges Edges -> Edges [strat (1 0) gather (e E)] .
+    eq E:Edge or-else Es:Edges = E:Edge .
+    eq none or-else Es? = Es? .
+
+    op applyAllRules : State StateList Nat -> Edges .
+    eq applyAllRules(S, SL, NAT) =
+        applyRule(S, SL, NAT, 'der-a) ;
+        applyRule(S, SL, NAT, 'der-b) [print "rl: " S] .
+
+    op myModule : -> Module .
+    eq myModule = upModule('ERE-THEOREMS, false) .
+
+    op < error > : -> [State] .
+
+    op applyEq : State StateList Nat Qid -> Edges .
+   ceq applyEq(S, SL, NAT, R) = eqEdge( applResult(R, getContext(Result), getSubstitution(Result))
+                                      , mkProofHint(downTerm(getTerm(Result), < error >), SL, NAT)
+                                      )
+    if Result := metaXapply(myModule, upTerm(S), R, none, 0, unbounded, 0) [print "eq: " R " " S ] .
+    eq applyEq(S, SL, NAT, R) = none [owise] .
+
+    op applyRule : State StateList Nat Qid -> Edges .
+   ceq applyRule(S, SL, NAT, R) = rlEdge( applResult(R, getContext(Result), getSubstitution(Result))
+                                        , mkProofHint(downTerm(getTerm(Result), < error >), SL, NAT)
+                                        )
+    if Result := metaXapply(myModule, upTerm(S), R, none, 0, unbounded, 0) .
+    eq applyRule(S, SL, NAT, R) = none [owise] .
+
+    vars Alpha Alpha1 Alpha2 : Pattern .
+    vars Beta  Beta1  Beta2  : Pattern .
+    vars Phi   Phi1   Phi2   : Pattern .
+    vars Psi   Psi1   Psi2   : Pattern .
+    vars A B A1 A2 : Letter .
+    vars Notation : Notation .
+
+    *** Proof hint generation ************************************************
+
+    op proofHint : Pattern -> Node  [memo] .
+    eq proofHint(Alpha) = mkProofHint(< Alpha >, empty, 20) .
+
+    *** Mapping EREs to its Matching Logic signature *************************
+    --- We may consider desugaring the constructors via the notation defined
+    --- in some other module. But I'm not sure it will be necessary.
+
+    --- Generate a fresh set variable for each regexp.
+    op F : Pattern -> Qid .
+    eq F(Alpha) = qid(str(Alpha)) .
+
+    op str : Pattern -> String .
+    eq str(bot) = "z" .
+    eq str(a) = "a" .
+    eq str(b) = "b" .
+    eq str(epsilon) = "e" .
+    eq str(Alpha . Beta) = "C" + str(Alpha) + str(Beta) + "D" .
+    eq str(Alpha \/ Beta) = "C" + str(Alpha) + "p" + str(Beta) + "D" .
+    eq str(Alpha /\ Beta) = "C" + str(Alpha) + "q" + str(Beta) + "D" .
+    eq str(Alpha -> Beta) = "C" + str(Alpha) + "i" + str(Beta) + "D" .
+    eq str([[ kleene X Alpha ]]) = "C" + str(Alpha) + "Dx" .
+    eq str(~ Alpha) = "nC" + str(Alpha) + "D" .
+
+    *** fp *******************************************************************
+    --- Here, we generate the fixedpoint needed for our proof.
+
+    op fp : Node -> Pattern .
+    eq fp(backlink(< Alpha >)) = sVar F(Alpha) .
+    eq fp(node(< Alpha >, eqEdge(EL, N))) = fp(N) .
+    eq fp(node(< Alpha >, rlEdge(applResult('der-a,     Ctx_A, Subst_A), N_A) ;
+                          rlEdge(applResult('der-b,     Ctx_B, Subst_B), N_B)
+         )    )
+     = mu qid(str(Alpha)) (epsilon \/ ((a . fp(N_A)) \/ (b . fp(N_B)))) [owise] .
+
+
+    *** der-tree *************************************************************
+    --- Simplify proofHint into derivative tree (debugging only).
+
+    op der-tree : Node -> Node .
+    eq der-tree(backlink(< Alpha >)) = backlink(< Alpha >) .
+    eq der-tree(node(< Alpha >, eqEdge(EL, N))) = der-tree(N) .
+    eq der-tree(node(< Alpha >, rlEdge(applResult('der-a,     Ctx_A, Subst_A), N_A) ;
+                                rlEdge(applResult('der-b,     Ctx_B, Subst_B), N_B)
+         )    )
+     = node(< Alpha >, rlEdge(applResult('der-a,     [], none), der-tree(N_A)) ;
+                       rlEdge(applResult('der-b,     [], none), der-tree(N_B))
+           )    [owise] .
+
+
+    *** Metamath proofs ******************************************************
+
+    vars MMP : MM0SExpr .
+
+    *** Contextual reasoning with equalities *********************************
+
+    vars LR : String .
+    op cong-thm : Qid String -> Qid .
+    eq cong-thm('_->_, LR) = qid("imp" + LR) .
+    eq cong-thm('_\/_, LR) = qid("or" + LR) .
+    eq cong-thm('_/\_, LR) = qid("and" + LR) .
+    eq cong-thm('_._, LR) = qid("concat" + LR) .
+    eq cong-thm('~_, LR) = 'not .
+    eq cong-thm('`[`[kleene__`]`], LR) = 'kleene .
+
+
+   --- Returns the theorem corresponding to the application of a rule.
+    op theorem-for-equivalence : Substitution Qid -> MM0SExpr .
+   --- Special cases:
+    eq theorem-for-equivalence('X:Qid <- T1 ; 'Alpha:Pattern <- T2, 'regex_eq_ewp_kleene) =     [[ 'regex_eq_ewp_kleene positivity(downTerm(T1, 'bad-down-term), downTerm(T2, sVar 'bad-down-term-alpha)) ]] .
+    eq theorem-for-equivalence('X:Qid <- T1 ; 'Alpha:Pattern <- T2, 'regex_eq_ewp_not_kleene) = [[ 'regex_eq_ewp_not_kleene positivity(downTerm(T1, 'bad-down-term), downTerm(T2, sVar 'bad-down-term-alpha)) ]] .
+    eq theorem-for-equivalence('X:Qid <- T1 ; 'Alpha:Pattern <- T2 ; 'Y:Qid <- T3 , 'regex_eq_double_kleene)
+                                                                                             =  [[ 'regex_eq_double_kleene sFresh(downTerm(T1, 'bad-down-term), downTerm(T2, sVar 'bad-down-term-alpha)) ]] .
+    eq theorem-for-equivalence('X:Qid <- T1 ; 'Alpha:Pattern <- T2 ; 'A:Letter <- Q , 'regex_eq_der_kleene)
+                                                                                              = [[ qid("regex_eq_der_kleene_wrt_" + string(getName(Q))) sFresh(downTerm(T1, 'bad-down-term), downTerm(T2, sVar 'bad-down-term-alpha)) ]] .
+
+    eq theorem-for-equivalence('A:Letter <- Q ; Subst , R) = qid(string(R) + "-wrt-" + string(getName(Q))) .
+    eq theorem-for-equivalence(                 Subst , R) = R [owise] .
+
+
+    op cong-of-equiv _ _ : Qid MM0SExpr -> MM0SExpr .
+    eq cong-of-equiv Q MMP = [[ qid("cong-of-equiv-" + string(Q)) MMP ]] .
+
+    op lift-equality-to-context : Context Term Term MM0SExpr -> MM0SExpr .
+    --- input: Context, Original Term, Final Term, Continuation
+    --- At each step, we must unwrap both the original term and the context,
+    --- so that we can pass the pluged context to the positivity generator.
+    vars TOrig TFinal : Term .
+
+    eq lift-equality-to-context([], TOrig, TFinal, MMP) = MMP .
+
+    --- special case for Kleene due to positivitiy
+    eq lift-equality-to-context('`[`[kleene__`]`][ T1, Ctx ], '`[`[kleene__`]`][ T1, TOrig ], '`[`[kleene__`]`][ T1, TFinal ], MMP)
+     = [[ 'cong-of-equiv-kleene positivity(downTerm(T1, 'bad-down-term), downTerm(TOrig,  sVar 'bad-down-term))
+                               positivity(downTerm(T1, 'bad-down-term), downTerm(TFinal, sVar 'bad-down-term))
+                               lift-equality-to-context(Ctx, TOrig, TFinal, MMP) ]] .
+
+    --- special cases for state ctors
+    eq lift-equality-to-context('<_>[ Ctx ], '<_>[ TOrig ], '<_>[ TFinal ], MMP)
+     = lift-equality-to-context(Ctx, TOrig, TFinal, MMP) .
+
+    eq lift-equality-to-context(Q [ Ctx ], Q[ TOrig ], Q[ TFinal ], MMP)
+     = cong-of-equiv cong-thm(Q, "") lift-equality-to-context(Ctx, TOrig, TFinal, MMP) .
+    eq lift-equality-to-context(Q [ Ctx , T2 ], Q [ TOrig , T2 ], Q [ TFinal , T2 ], MMP)
+     = cong-of-equiv cong-thm(Q, "-l") lift-equality-to-context(Ctx, TOrig, TFinal, MMP) .
+    eq lift-equality-to-context(Q [ T1 , Ctx ], Q [ T1 , TOrig ], Q [ T1 , TFinal ], MMP)
+     = cong-of-equiv cong-thm(Q, "-r") lift-equality-to-context(Ctx, TOrig, TFinal, MMP) .
+
+    *** eFresh ****************************************************************
+    op eFresh : Qid Pattern -> MM0SExpr .
+    eq eFresh(X, Notation)      = eFresh(X, desugar(Notation))   .
+   ceq eFresh(X, Phi)           = 'eFresh-disjoint                                  if not occursIn(X, Phi) .
+   ceq eFresh(X, app Phi1 Phi2) = [[ 'eFresh-app eFresh(X, Phi1) eFresh(X, Phi2) ]] if     occursIn(X, app Phi1 Phi2) .
+   ceq eFresh(X, Phi1 -> Phi2)  = [[ 'eFresh-imp eFresh(X, Phi1) eFresh(X, Phi2) ]] if     occursIn(X, Phi1 -> Phi2) .
+    eq eFresh(X, exists X Phi)  = 'eFresh-exists-same-var .
+   ceq eFresh(X, exists Y Phi)  = [[ 'eFresh-exists eFresh(X, Phi) ]] if     occursIn(X, Phi) /\ X =/= Y .
+   ceq eFresh(X, mu Y Phi)      = [[ 'eFresh-mu eFresh(X, Phi) ]]                   if     occursIn(X, Phi) /\ X =/= Y .
+
+    *** sFresh ****************************************************************
+    op sFresh : Qid Pattern -> MM0SExpr .
+    eq sFresh(X, Notation)      = sFresh(X, desugar(Notation))   .
+   ceq sFresh(X, Phi)           = 'sFresh-disjoint                                  if not occursIn(X, Phi) .
+   ceq sFresh(X, app Phi1 Phi2) = [[ 'sFresh-app sFresh(X, Phi1) sFresh(X, Phi2) ]] if     occursIn(X, app Phi1 Phi2) .
+   ceq sFresh(X, Phi1 -> Phi2)  = [[ 'sFresh-imp sFresh(X, Phi1) sFresh(X, Phi2) ]] if     occursIn(X, Phi1 -> Phi2) .
+   ceq sFresh(X, exists Y Phi)  = [[ 'sFresh-exists sFresh(X, Phi) ]] if     occursIn(X, Phi) .
+    eq sFresh(X, mu X Phi)      = 'sFresh-mu-same-var .
+   ceq sFresh(X, mu Y Phi)      = [[ 'sFresh-mu sFresh(X, Phi) ]]                   if     occursIn(X, Phi) /\ X =/= Y .
+
+    *** propag-sSubst *********************************************************
+    op propag-sSubst : Pattern Qid Pattern -> MM0SExpr .
+    eq propag-sSubst(Psi, X, Notation) = propag-sSubst(Psi, X, desugar(Notation)) .
+   ceq propag-sSubst(Psi, X, Phi) = 'sSubstitution-disjoint if not occursIn(X, Phi) .
+    eq propag-sSubst(Psi, X, sVar X) = 'sSubstitution-in-same-sVar .
+    eq propag-sSubst(Psi, X, app Phi1 Phi2) = [[ '-sSubst-app propag-sSubst(Psi, X, Phi1) propag-sSubst(Psi, X, Phi2) ]] .
+    eq propag-sSubst(Psi, X, Phi1 -> Phi2) = [[ '-sSubst-imp propag-sSubst(Psi, X, Phi1) propag-sSubst(Psi, X, Phi2) ]] .
+    eq propag-sSubst(Psi, X, exists Y Phi) = [[ '-sSubst-exists eFresh(Y, Psi) propag-sSubst(Psi, X, Phi) ]] .
+    eq propag-sSubst(Psi, X, mu X Phi) = 'sSubstitution-in-same-mu .
+   ceq propag-sSubst(Psi, X, mu Y Phi) = [[ '-sSubst-mu sFresh(Y, Psi) propag-sSubst(Psi, X, Phi) ]] if X =/= Y .
+
+
+   *** positivity ******************************************************************
+    op positivity : Qid Pattern -> MM0SExpr .
+    eq positivity(X, sVar X) = 'positive-in-same-sVar .
+   ceq positivity(X, Phi) = 'positive-disjoint if not occursIn(X, Phi) .
+    eq positivity(X, Phi1 -> Phi2) = [[ 'positive-in-imp negativity(X, Phi1) positivity(X, Phi2) ]] .
+    eq positivity(X, app Phi1 Phi2) = [[ 'positive-in-app positivity(X, Phi1) positivity(X, Phi2) ]] .
+    eq positivity(X, exists Y Phi) = [[ 'positive-in-exists positivity(X, Phi) ]] .
+    eq positivity(X, mu X Phi) = [[ 'positive-fresh sFresh(X, mu X Phi) ]] .
+   ceq positivity(X, mu Y Phi) = [[ 'positive-in-mu positivity(X, Phi) ]]  if X =/= Y .
+    eq positivity(X, [[kleene X Phi]]) = 'positive-in-same-mu .
+   ceq positivity(X, [[kleene Y Phi]]) = [[ 'positive-fresh sFresh(X, [[kleene Y Phi]]) ]]  if X =/= Y .
+    eq positivity(X, Phi1 \/ Phi2) = [[ 'positive-in-or positivity(X, Phi1) positivity(X, Phi2) ]] .
+    eq positivity(X, Notation) =  positivity(X, desugar(Notation)) [owise] .
+
+   *** negativity ******************************************************************
+    op negativity : Qid Pattern -> MM0SExpr .
+   ceq negativity(X, Phi) = 'negative-disjoint if not occursIn(X, Phi) .
+    eq negativity(X, Phi1 -> Phi2) = [[ 'negative-in-imp positivity(X, Phi1) negativity(X, Phi2) ]] .
+    eq negativity(X, app Phi1 Phi2) = [[ 'negative-in-app negativity(X, Phi1) negativity(X, Phi2) ]] .
+    eq negativity(X, exists Y Phi) = [[ 'negative-in-exists negativity(X, Phi) ]] .
+    eq negativity(X, mu X Phi) = [[ 'negative-fresh sFresh(X, Phi) ]] .
+   ceq negativity(X, mu Y Phi) = [[ 'negative-in-mu negativity(X, Phi) ]]  if X =/= Y .
+    eq negativity(X, [[kleene X Phi]]) = 'negative-in-same-mu .
+   ceq negativity(X, [[kleene Y Phi]]) = [[ 'negative-fresh sFresh(X, Phi) ]]  if X =/= Y .
+    eq negativity(X, Phi1 \/ Phi2) = [[ 'negative-in-or negativity(X, Phi1) negativity(X, Phi2) ]] .
+    eq negativity(X, Notation) =  negativity(X, desugar(Notation)) [owise] .
+
+    *** unfold ***************************************************************
+    op unfold-r : Pattern MM0SExpr -> MM0SExpr .
+    eq unfold-r(mu X Phi, MMP) = [[ 'unfold-r positivity(X, Phi) [[ 'norm-lemma-r propag-sSubst(mu X Phi, X, Phi) MMP ]] ]] .
+
+   *** is-letter *************************************************************
+    op is-letter : Letter -> MM0SExpr .
+    eq is-letter(a) = 'orl .
+    eq is-letter(b) = 'orr .
+
+   *** epsilon-implies-ewp ***************************************************
+   --- MetaTheorem:
+   ---  $epsilon -> Phi$ if hasEWP(Phi) .
+
+    op epsilon-implies-ewp : Pattern -> MM0SExpr .
+    eq epsilon-implies-ewp(epsilon) = 'id .
+    eq epsilon-implies-ewp(Phi /\ Psi) = [[ 'iand                   epsilon-implies-ewp(Phi) epsilon-implies-ewp(Psi) ]] .
+    eq epsilon-implies-ewp(Phi .  Psi) = [[ 'epsilon-implies-concat epsilon-implies-ewp(Phi) epsilon-implies-ewp(Psi) ]] .
+   ceq epsilon-implies-ewp(Phi \/ Psi) = [[ 'orld                   epsilon-implies-ewp(Phi) ]] if hasEWP(Phi) .
+   ceq epsilon-implies-ewp(Phi \/ Psi) = [[ 'orrd                   epsilon-implies-ewp(Psi) ]] if not hasEWP(Phi) /\ hasEWP(Psi) .
+    eq epsilon-implies-ewp([[kleene X Alpha]]) = [[ 'epsilon-implies-kleene positivity(X, Alpha) ]] .
+
+    eq epsilon-implies-ewp(~ bot)          = 'epsilon-implies-top .
+    eq epsilon-implies-ewp(~ L:Letter)     = [[ 'epsilon-implies-not-letter is-letter(L:Letter) ]] .
+   ceq epsilon-implies-ewp(~ (Phi .  Psi)) = [[ 'epsilon-implies-not-concat-l epsilon-implies-ewp(~ Phi) ]] if not hasEWP(Phi) .
+   ceq epsilon-implies-ewp(~ (Phi .  Psi)) = [[ 'epsilon-implies-not-concat-r epsilon-implies-ewp(~ Psi) ]] if hasEWP(Phi) /\ not hasEWP(Psi).
+   ceq epsilon-implies-ewp(~ (Phi /\ Psi)) = [[ 'epsilon-implies-not-and-l    epsilon-implies-ewp(~ Phi) ]] if not hasEWP(Phi) .
+   ceq epsilon-implies-ewp(~ (Phi /\ Psi)) = [[ 'epsilon-implies-not-and-r    epsilon-implies-ewp(~ Psi) ]] if hasEWP(Phi) /\ not hasEWP(Psi).
+    eq epsilon-implies-ewp(~ (Phi \/ Psi)) = [[ 'epsilon-implies-not-or       epsilon-implies-ewp(~ Phi) epsilon-implies-ewp(~ Psi) ]] .
+    eq epsilon-implies-ewp(~ ~ Phi)        = [[ 'rsyl 'dne epsilon-implies-ewp(Phi) ]]  .
+
+
+    *** main-goal ************************************************************
+    --- Here, we split the proof for a regular expression into
+    --- two subgoals --- (top-implies-fp) and (fp-implies-regexp).
+
+    op theorem-main-goal : Pattern -> MM0Decl .
+    eq theorem-main-goal(Phi)
+     = theorem-top-implies-fp(Phi)
+       theorem-fp-implies-regex(Phi)
+       pub theorem 'proof-main-goal { all-sVars(Phi) colon SVar }
+           colon $ Phi $
+             = quote([[ 'rsyl [[ 'bang 'top-implies-fp all-sVars((top-word 'X) -> fp(proofHint(Phi))) ]]
+                              [[ 'bang 'fp-implies-regex all-sVars(fp(proofHint(Phi)) -> Phi) ]]
+                        'domain-words ]]) ; .
+    op theorem-main-goal-mm0 : Pattern -> MM0Decl .
+    eq theorem-main-goal-mm0(Phi)
+     =  theorem 'proof-main-goal { all-sVars(Phi) colon SVar } colon $ Phi $ ; .
+
+
+    *** top-implies-fp *******************************************************
+    vars FpUnf FpUnfA FpUnfB FpCtximp FpCtximpA FpCtximpB : Pattern .
+
+    op theorem-top-implies-fp : Pattern -> MM0Decl .
+    eq theorem-top-implies-fp(Phi)
+     = theorem 'top-implies-fp
+             { all-sVars((top-word 'X) -> fp(proofHint(Phi))) colon SVar }
+             colon $ (top-word 'X) -> fp(proofHint(Phi)) $
+                 = [[ 'named 'quote(proof-top-implies-fp(proofHint(Phi))) ]] ;
+       mkStats('top-implies-fp, proof-top-implies-fp(proofHint(Phi)))
+    .
+    op theorem-top-implies-fp-mm0 : Pattern -> MM0Decl .
+    eq theorem-top-implies-fp-mm0(Phi)
+     = theorem 'top-implies-fp
+             { all-sVars((top-word 'X) -> fp(proofHint(Phi))) colon SVar }
+             colon $ (top-word 'X) -> fp(proofHint(Phi)) $ ; .
+
+    op proof-top-implies-fp : Node -> MM0SExpr .
+    eq proof-top-implies-fp(N) =
+       [[ 'top-implies-fp-init
+            unfold-r(fp(N), 'orl )
+            proof-top-implies-fp((fp(N) . top-letter) -> fp(N), N)
+       ]] .
+
+    op proof-top-implies-fp : Pattern Node -> MM0SExpr .
+    eq proof-top-implies-fp(Phi, node(< Alpha >, eqEdge(applResult(R, Ctx, Subst), N)))
+     = proof-top-implies-fp(Phi, N) .
+    eq proof-top-implies-fp(Phi, backlink(< Alpha >))
+     = 'top-implies-fp-leaf .
+
+   ceq proof-top-implies-fp( ( FpCtximp . top-letter ) -> FpUnf
+                           , node(< Phi >, rlEdge(applResult('der-a,     Ctx_A, Subst_A), N_A) ;
+                                           rlEdge(applResult('der-b,     Ctx_B, Subst_B), N_B)
+                           ) )
+     = [[ 'top-implies-fp-interior
+         positivity(X, FpUnfA)
+         positivity(X, FpUnfB)
+         positivity(X, FpCtximpA)
+         positivity(X, FpCtximpB)
+         [[ 'norm-lemma-r propag-sSubst(FpUnf, X, FpUnfA) unfold-r(substitute[ FpUnf / X ] in FpUnfA, 'orl) ]]
+         [[ 'norm-lemma-r propag-sSubst(FpUnf, X, FpUnfB) unfold-r(substitute[ FpUnf / X ] in FpUnfB, 'orl) ]]
+         [[ 'norm-lemma-r propag-sSubst(FpUnf, X, FpUnfA)
+            [[ 'norm-lemma [[ 'norm-concat-l propag-sSubst([[ctximp-app 'box (sVar 'box . top-letter) (FpUnf) ]], X, FpCtximpA) ]]
+                         proof-top-implies-fp((substitute[ [[ctximp-app 'box (sVar 'box . top-letter) (FpUnf) ]] / X ] in (FpCtximpA . top-letter)) -> substitute[ FpUnf / X ] in FpUnfA , N_A)
+         ]] ]]
+         [[ 'norm-lemma-r propag-sSubst(FpUnf, X, FpUnfB)
+            [[ 'norm-lemma [[ 'norm-concat-l propag-sSubst([[ctximp-app 'box (sVar 'box . top-letter) (FpUnf) ]], X, FpCtximpB ) ]]
+                         proof-top-implies-fp((substitute[ [[ctximp-app 'box (sVar 'box . top-letter) (FpUnf) ]] / X ] in (FpCtximpB . top-letter)) -> substitute[ FpUnf / X ] in FpUnfB , N_B)
+         ]] ]]
+       ]]
+    if mu X (epsilon \/ ((a . FpCtximpA) \/ (b . FpCtximpB))) := FpCtximp
+    /\ mu X (epsilon \/ ((a . FpUnfA)    \/ (b . FpUnfB)))   := FpUnf
+     .
+
+
+    *** fp-implies-regex ************************************************************
+    op theorem-fp-implies-regex : Pattern -> MM0Decl .
+    eq theorem-fp-implies-regex(Phi)
+     = theorem 'fp-implies-regex
+             { all-sVars(fp(proofHint(Phi)) -> Phi) colon SVar }
+             colon $ fp(proofHint(Phi)) -> Phi $
+                 = quote(proof-fp-implies-regex(proofHint(Phi))) ;
+       mkStats('fp-implies-regex, proof-fp-implies-regex(proofHint(Phi)))
+     .
+    op theorem-fp-implies-regex-mm0 : Pattern -> MM0Decl .
+    eq theorem-fp-implies-regex-mm0(Phi)
+     = theorem 'fp-implies-regex
+             { all-sVars(fp(proofHint(Phi)) -> Phi) colon SVar }
+             colon $ fp(proofHint(Phi)) -> Phi $ ; .
+
+    op proof-fp-implies-regex : Node -> MM0SExpr .
+    eq proof-fp-implies-regex(backlink(< Alpha >)) = 'fp-implies-regex-leaf .
+    eq proof-fp-implies-regex(node(S, eqEdge(applResult(R, Ctx, Subst), N))) = [[ 'apply-equiv lift-equality-to-context(Ctx, upTerm(S), upTerm(getState(N)), theorem-for-equivalence(Subst, R)) proof-fp-implies-regex(N) ]] .
+    eq proof-fp-implies-regex(node(S, eqEdge(applResult(R, Ctx, Subst), N))) = [[ 'apply-equiv lift-equality-to-context(Ctx, upTerm(S), upTerm(getState(N)), theorem-for-equivalence(Subst, R)) proof-fp-implies-regex(N) ]] .
+    eq proof-fp-implies-regex(node(< Alpha >,
+                                       rlEdge(applResult('der-a,     Ctx_A, Subst_A), N_A) ;
+                                       rlEdge(applResult('der-b,     Ctx_B, Subst_B), N_B)
+                             )    )
+     = [[ 'fp-implies-regex-interior
+            positivity(F(Alpha), fp(N_A))
+            positivity(F(Alpha), fp(N_B))
+            epsilon-implies-ewp(Alpha)
+            [[ 'norm-lemma propag-sSubst(Alpha, qid(str(Alpha)), fp(N_A))  proof-fp-implies-regex(N_A)]]
+            [[ 'norm-lemma propag-sSubst(Alpha, qid(str(Alpha)), fp(N_B))  proof-fp-implies-regex(N_B)]]
+       ]]
+     .
+
+   *** Statistics ********************
+    ---------- stat name,theorems,pos,subst,equiv,bitr,cong,nodes
+    op comment stat _   , _      , _ , _   , _ , _   , _  , _ ; :    Qid Nat Nat Nat Nat Nat Nat Nat -> MM0Decl [ctor] .
+    op mkStats : Qid MM0SExpr -> MM0Decl .
+    eq mkStats(Q, MMP) = comment stat Q,
+                                 count-theorems-containing("", MMP),
+                                 count-theorems-containing("pos", MMP),
+                                 count-theorems-containing("sSubst", MMP),
+                                 count-theorems-containing("apply-equiv", MMP),
+                                 count-theorems-containing("bitri", MMP),
+                                 count-theorems-containing("cong-of-equiv", MMP),
+                                 count-theorems-containing("top-implies-fp", MMP) + count-theorems-containing("fp-implies-regex", MMP)
+                         ; .
+    var Str : String .
+    var Exprs1 Exprs2 : NeMM0SExprList .
+    op count-theorems-containing : String MM0SExpr -> Nat .
+   ceq count-theorems-containing(Str, Q) = 1 if find(string(Q), Str, 0) =/= notFound .
+   ceq count-theorems-containing(Str, Q) = 0 if find(string(Q), Str, 0)  == notFound .
+    eq count-theorems-containing(Str, [[ MMP ]]) = count-theorems-containing(Str, MMP) .
+    eq count-theorems-containing(Str, [[ Exprs1 Exprs2 ]]) = count-theorems-containing(Str, [[ Exprs1 ]]) + count-theorems-containing(Str, [[ Exprs2 ]]) .
+endm
+
+--- set print attribute on .
